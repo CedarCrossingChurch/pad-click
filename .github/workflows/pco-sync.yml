@@ -1,0 +1,22 @@
+# Pulls the Sunday Service plan from Planning Center into the app every hour.
+# The app also syncs whenever someone opens it, and the Sync now button forces one.
+name: Sync from Planning Center
+
+on:
+  schedule:
+    - cron: '23 * * * *'   # every hour at :23
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run the pco-sync function
+        env:
+          SB_URL: https://lamithxecgiblsgvoszy.supabase.co
+          SB_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhbWl0aHhlY2dpYmxzZ3Zvc3p5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIzNzcyNjQsImV4cCI6MjEwNzk1MzI2NH0.zSbJdlIuL3PHW0oeSLgc2Wk-uGAhNRYet8Y_wpPNsM4
+        run: |
+          curl -fsS -X POST "$SB_URL/functions/v1/pco-sync" \
+            -H "apikey: $SB_KEY" -H "Authorization: Bearer $SB_KEY" \
+            -H "Content-Type: application/json" -d '{}'
+          echo
