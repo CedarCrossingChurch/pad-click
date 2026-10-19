@@ -162,6 +162,7 @@ body:not(.locked) .locked-only{display:none}
 .pco b{font-weight:600}
 .pco .err{color:var(--warn)}
 #pcoSync{font-size:13px;padding:6px 10px}
+#planPick{margin-top:6px}
 .edit{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:10px;background:#12161a;border:1px solid var(--line);border-top:0;border-radius:0 0 5px 5px;margin-top:-6px}
 .edit .wide{grid-column:1/-1}
 .edit label{display:grid;gap:4px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-family:var(--f-display);font-weight:600}
@@ -300,7 +301,7 @@ kbd{font-family:var(--f-mono);font-size:11px;border:1px solid var(--line);border
         <button id="clearSet" class="edit-only">Clear set</button>
         <button id="pcoSync">Sync now</button>
       </div>
-      <div class="pco" id="pcoBox"><span id="pcoPlan">Planning Center: checking…</span><span class="note" id="pcoWhen"></span></div>
+      <div class="pco" id="pcoBox"><span id="pcoPlan">Planning Center: checking…</span><span class="note" id="pcoWhen"></span><select id="planPick" class="edit-only" aria-label="Choose which Sunday Service plan to use"><option value="">Next Sunday (automatic)</option></select></div>
       <ol class="songs" id="setList"></ol>
       <p class="note" id="setEmpty" hidden>No songs in the Planning Center plan yet.</p>
       <p class="note">The setlist comes from the Sunday Service plan in Planning Center. Change songs, keys and order there. Selecting a song loads its key, tempo and time signature.</p>
@@ -426,6 +427,7 @@ function applyLock(){
   $('#lockBtn').textContent=pin?'Lock editing':'Unlock editing';
   if(!pin)editing=null;
   renderSongs();
+  if(pin)loadPlans();
 }
 /* Planning Center sync */
 let pcoStatus=(cached&&cached.pco)||null, pcoBusy=false;
@@ -437,7 +439,13 @@ function renderPco(){
   const d=s.plan_date?new Date(s.plan_date).toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}):'';
   p.textContent='';const b=document.createElement('b');b.textContent=(s.service_type||'Planning Center')+(d?' · '+d:'');p.appendChild(b);
   if(s.plan_title&&!/\d{4}/.test(s.plan_title))p.appendChild(document.createTextNode(' · '+s.plan_title));
-  w.textContent='Updated from Planning Center at '+fmtTime(s.synced_at)+(s.message?'. Last check failed: '+s.message:'');
+  w.textContent=(s.pinned_plan_id?'Pinned to this plan. ':'')+'Updated from Planning Center at '+fmtTime(s.synced_at)+(s.message?'. Last check failed: '+s.message:'');
+  const sel=$('#planPick');
+  if(sel&&document.activeElement!==sel){
+    const v=s.pinned_plan_id||'';
+    if(v&&![...sel.options].some(o=>o.value===v)){const o=document.createElement('option');o.value=v;o.textContent=b.textContent;sel.appendChild(o)}
+    sel.value=v;
+  }
 }
 async function syncPco(manual){
   if(pcoBusy)return;pcoBusy=true;
@@ -452,6 +460,35 @@ async function syncPco(manual){
     }
   }catch(e){if(manual)say("Couldn't reach Planning Center sync. Check the internet connection.")}
   finally{pcoBusy=false;btn.textContent='Sync now';btn.disabled=false;await pull()}
+}
+let plansLoadedAt=0;
+async function loadPlans(){
+  if(Date.now()-plansLoadedAt<300000)return;
+  try{
+    const r=await fetch(FN_URL,{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json'},body:JSON.stringify({action:'list'})});
+    const j=await r.json();if(!j.ok)return;
+    plansLoadedAt=Date.now();
+    const sel=$('#planPick'),v=(pcoStatus&&pcoStatus.pinned_plan_id)||'';
+    sel.innerHTML='<option value="">Next Sunday (automatic)</option>';
+    j.plans.forEach(p=>{
+      const o=document.createElement('option');o.value=p.id;
+      const d=new Date(p.date).toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'});
+      o.textContent=d+(p.title?' · '+p.title:'')+(p.upcoming?' (upcoming)':'');
+      sel.appendChild(o);
+    });
+    sel.value=v;
+  }catch(e){}
+}
+async function choosePlan(id){
+  if(!pin){say('Unlock editing first.');return}
+  setSync('busy','Switching plan…');
+  try{
+    const r=await fetch(FN_URL,{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json'},body:JSON.stringify({action:'choose',pin,plan_id:id||null})});
+    const j=await r.json().catch(()=>({}));
+    if(j.ok)say(id?'Pinned that plan: '+j.status.song_count+' songs loaded.':'Back to automatic: following the next Sunday Service.');
+    else{say("Couldn't switch plans: "+(j.error||'unknown error'));if(r.status===403)lock()}
+  }catch(e){say("Couldn't reach Planning Center sync. Check the internet connection.")}
+  await pull();
 }
 function lock(){pin=null;try{localStorage.removeItem('pc.pin');sessionStorage.removeItem('pc.pin')}catch(e){}applyLock()}
 
@@ -1038,6 +1075,8 @@ renderAll();
 if(syncedAt)setSync('busy','Using copy from '+fmtTime(syncedAt)+' · checking…');
 renderPco();
 $('#pcoSync').addEventListener('click',()=>syncPco(true));
+$('#planPick').addEventListener('change',e=>choosePlan(e.target.value));
+$('#planPick').addEventListener('focus',loadPlans);
 pull().then(()=>syncPco(false));
 setInterval(()=>{if(!document.hidden)pull()},30000);
 setInterval(()=>{if(!document.hidden)syncPco(false)},600000);
