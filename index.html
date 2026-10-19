@@ -157,6 +157,11 @@ body:not(.locked) .locked-only{display:none}
 .add{font-size:13px;padding:6px 10px;min-width:72px}
 .add:not(:disabled){color:var(--click);border-color:var(--click-dim)}
 .add:disabled{opacity:.6}
+.mv,#clearSet,.add{display:none!important}
+.pco{display:grid;gap:2px;padding:10px 12px;background:var(--panel-2);border:1px solid var(--line);border-radius:5px;font-size:13px}
+.pco b{font-weight:600}
+.pco .err{color:var(--warn)}
+#pcoSync{font-size:13px;padding:6px 10px}
 .edit{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:10px;background:#12161a;border:1px solid var(--line);border-top:0;border-radius:0 0 5px 5px;margin-top:-6px}
 .edit .wide{grid-column:1/-1}
 .edit label{display:grid;gap:4px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-family:var(--f-display);font-weight:600}
@@ -293,16 +298,18 @@ kbd{font-family:var(--f-mono);font-size:11px;border:1px solid var(--line);border
       <div class="setlist-head">
         <h2>Setlist</h2>
         <button id="clearSet" class="edit-only">Clear set</button>
+        <button id="pcoSync">Sync now</button>
       </div>
+      <div class="pco" id="pcoBox"><span id="pcoPlan">Planning Center: checking…</span><span class="note" id="pcoWhen"></span></div>
       <ol class="songs" id="setList"></ol>
-      <p class="note" id="setEmpty" hidden>The setlist is empty. Unlock editing and add songs from the library below.</p>
-      <p class="note">Selecting a song loads its key, tempo and time signature. If the pad is playing it crossfades to the new key.</p>
+      <p class="note" id="setEmpty" hidden>No songs in the Planning Center plan yet.</p>
+      <p class="note">The setlist comes from the Sunday Service plan in Planning Center. Change songs, keys and order there. Selecting a song loads its key, tempo and time signature.</p>
 
       <div class="setlist-head lib-head">
         <h2>Song library</h2>
         <button id="addSong" class="edit-only">New song</button>
       </div>
-      <p class="note locked-only" id="lockedNote">Tap a song to load it. Unlock editing at the top to add songs or change the setlist.</p>
+      <p class="note locked-only" id="lockedNote">Tap a song to load it. Unlock editing at the top to fix a song's tempo or time signature.</p>
       <input type="search" id="libSearch" placeholder="Search songs" aria-label="Search the song library">
       <ul class="lib" id="lib"></ul>
     </aside>
@@ -357,7 +364,7 @@ const cached=load('pc.cache');
 if(cached&&Array.isArray(cached.library)){library=cached.library;setIds=Array.isArray(cached.setIds)?cached.setIds:[];syncedAt=cached.at||null}
 const byId=id=>library.find(s=>s.id===id);
 let cur=-1, editing=null, clearArmed=null, loadedId=null;
-function cacheLib(){save('pc.cache',{library,setIds,at:syncedAt})}
+function cacheLib(){save('pc.cache',{library,setIds,at:syncedAt,pco:pcoStatus})}
 const newId=()=>(window.crypto&&crypto.randomUUID)?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==='x'?r:(r&3|8)).toString(16)});
 
 let pin=null;
@@ -375,10 +382,12 @@ async function pull(){
   if(pulling||pending||editing)return;
   pulling=true;
   try{
-    const [songs,items]=await Promise.all([
+    const [songs,items,sync]=await Promise.all([
       sb('/rest/v1/songs?select=id,name,song_key,bpm,meter&order=name'),
-      sb('/rest/v1/setlist_items?select=song_id&order=position')
+      sb('/rest/v1/setlist_items?select=song_id&order=position'),
+      sb('/rest/v1/sync_status?select=*').catch(()=>[])
     ]);
+    pcoStatus=(sync&&sync[0])||pcoStatus;renderPco();
     if(pending||editing)return;
     const curId=setIds[cur];
     library=songs.map(r=>({id:r.id,name:r.name,key:r.song_key,bpm:r.bpm,meter:r.meter}));
@@ -417,6 +426,32 @@ function applyLock(){
   $('#lockBtn').textContent=pin?'Lock editing':'Unlock editing';
   if(!pin)editing=null;
   renderSongs();
+}
+/* Planning Center sync */
+let pcoStatus=(cached&&cached.pco)||null, pcoBusy=false;
+const FN_URL=SB_URL+'/functions/v1/pco-sync';
+function renderPco(){
+  const p=$('#pcoPlan'),w=$('#pcoWhen');if(!p)return;
+  const s=pcoStatus;p.className='';
+  if(!s||!s.synced_at){p.textContent=s&&s.message?'Planning Center: '+s.message:'Planning Center: not synced yet';if(s&&s.message)p.className='err';w.textContent='';return}
+  const d=s.plan_date?new Date(s.plan_date).toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}):'';
+  p.textContent='';const b=document.createElement('b');b.textContent=(s.service_type||'Planning Center')+(d?' · '+d:'');p.appendChild(b);
+  if(s.plan_title&&!/\d{4}/.test(s.plan_title))p.appendChild(document.createTextNode(' · '+s.plan_title));
+  w.textContent='Updated from Planning Center at '+fmtTime(s.synced_at)+(s.message?'. Last check failed: '+s.message:'');
+}
+async function syncPco(manual){
+  if(pcoBusy)return;pcoBusy=true;
+  const btn=$('#pcoSync');btn.textContent='Syncing…';btn.disabled=true;
+  try{
+    const r=await fetch(FN_URL,{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json'},body:'{}'});
+    const j=await r.json().catch(()=>({}));
+    if(manual){
+      if(j.ok===false)say("Couldn't sync with Planning Center: "+(j.error||'unknown error'));
+      else if(j.skipped)say('Already up to date with Planning Center.');
+      else if(j.status)say('Synced with Planning Center: '+j.status.song_count+' songs.');
+    }
+  }catch(e){if(manual)say("Couldn't reach Planning Center sync. Check the internet connection.")}
+  finally{pcoBusy=false;btn.textContent='Sync now';btn.disabled=false;await pull()}
 }
 function lock(){pin=null;try{localStorage.removeItem('pc.pin');sessionStorage.removeItem('pc.pin')}catch(e){}applyLock()}
 
@@ -1001,8 +1036,11 @@ try{if(navigator.audioSession)navigator.audioSession.type='playback'}catch(e){}
 applyLock();
 renderAll();
 if(syncedAt)setSync('busy','Using copy from '+fmtTime(syncedAt)+' · checking…');
-pull();
+renderPco();
+$('#pcoSync').addEventListener('click',()=>syncPco(true));
+pull().then(()=>syncPco(false));
 setInterval(()=>{if(!document.hidden)pull()},30000);
+setInterval(()=>{if(!document.hidden)syncPco(false)},600000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)pull()});
 window.addEventListener('online',pull);
 window.addEventListener('offline',()=>setSync('off',syncedAt?'Offline · using copy from '+fmtTime(syncedAt):'Offline'));
