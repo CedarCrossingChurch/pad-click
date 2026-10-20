@@ -316,6 +316,10 @@ body.locked .signed-only{display:none!important}
 .route-toggle .chev{font-size:14px;color:var(--muted);transition:transform .15s}
 .route-toggle[aria-expanded="true"] .chev{transform:rotate(90deg)}
 .route-body{display:grid;gap:16px}
+.lib-head .route-toggle{flex:1;min-width:0}
+.lib-body{display:grid;gap:12px}
+.pl-from{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.pl-from select{flex:1 1 220px;width:auto}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -447,12 +451,14 @@ body.locked .signed-only{display:none!important}
       <p class="note" id="setNote">The setlist comes from the Sunday Service plan in Planning Center. Change songs, keys and order there. Selecting a song loads its key, tempo and time signature.</p>
 
       <div class="setlist-head lib-head">
-        <h2>Song library</h2>
+        <button class="route-toggle" id="libToggle" aria-expanded="false" aria-controls="libBody"><h2>Song library</h2><span class="route-sum" id="libSum"></span><span class="chev" aria-hidden="true">▶</span></button>
         <button id="addSong" class="edit-only">New song</button>
       </div>
+      <div class="lib-body" id="libBody" hidden>
       <p class="note locked-only" id="lockedNote">Tap a song to load it. Editors sign in at the top to fix a song's tempo or time signature.</p>
       <input type="search" id="libSearch" placeholder="Search songs" aria-label="Search the song library">
       <ul class="lib" id="lib"></ul>
+      </div>
     </aside>
   </div>
 
@@ -506,7 +512,7 @@ body.locked .signed-only{display:none!important}
 <section class="team" id="plPane" hidden aria-label="Playlists">
   <div class="team-card">
     <div class="setlist-head"><h2>Playlists</h2><button id="plClose">Close</button></div>
-    <p class="note">Build setlists outside Planning Center from any song in the church's Planning Center library, so chord charts still work. <b>Shared</b> playlists are for the band: editors build them and can make one the setlist on every device. <b>Personal</b> playlists are yours for practice and only change what your own device shows.</p>
+    <p class="note">Build setlists outside Planning Center from any song in the church's Planning Center library, so chord charts still work. <b>Shared</b> playlists are for the band: editors build them and can make one the setlist on every device. <b>Personal</b> playlists are yours for practice and only change what your own device shows. To make a Planning Center service the band setlist, editors pick it from the menu in the Planning Center box above the setlist.</p>
     <div class="pl-top"><select id="plPick" aria-label="Playlist"></select><button id="plNew">New playlist</button></div>
     <div id="plEditor" hidden style="display:grid;gap:12px">
       <div class="pl-row"><input type="text" id="plName" maxlength="80" placeholder="Playlist name" aria-label="Playlist name"><label class="check"><input type="checkbox" id="plShared"> Shared with the band</label></div>
@@ -514,6 +520,7 @@ body.locked .signed-only{display:none!important}
       <ol class="pl-items" id="plItems"></ol>
       <div id="plAdd" style="display:grid;gap:8px">
         <h3>Add songs</h3>
+        <div class="pl-from"><label class="label" for="plFromPlan">Copy from a service</label><select id="plFromPlan" aria-label="Copy songs from a Planning Center service"><option value="">Choose a Planning Center service…</option></select></div>
         <input type="search" id="plSearch" placeholder="Search song titles in Planning Center" aria-label="Search songs" autocomplete="off">
         <ul class="pl-results" id="plResults"></ul>
       </div>
@@ -549,7 +556,7 @@ const KEYS=['C','D♭','D','E♭','E','F','F♯','G','A♭','A','B♭','B'];
 const METERS={'4/4':{beats:4},'3/4':{beats:3},'2/4':{beats:2},'6/8':{beats:6,compound:true},'12/8':{beats:12,compound:true}};
 const SB_URL='https://lamithxecgiblsgvoszy.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhbWl0aHhlY2dpYmxzZ3Zvc3p5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIzNzcyNjQsImV4cCI6MjEwNzk1MzI2NH0.zSbJdlIuL3PHW0oeSLgc2Wk-uGAhNRYet8Y_wpPNsM4';
-const DEF={key:7,padVol:70,tone:45,shimmer:30,fade:4,voicing:'open',bpm:72,meter:'4/4',sub:1,sound:'beep',accent:true,clickVol:80,route:'split',padCh:0,clickCh:2,view:'mixer',split:0.45,chartSize:20,chartCols:1,localList:null,routingOpen:false,ctlTab:'click'};
+const DEF={key:7,padVol:70,tone:45,shimmer:30,fade:4,voicing:'open',bpm:72,meter:'4/4',sub:1,sound:'beep',accent:true,clickVol:80,route:'split',padCh:0,clickCh:2,view:'mixer',split:0.45,chartSize:20,chartCols:1,localList:null,routingOpen:false,ctlTab:'click',libOpen:false};
 
 function load(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}
 function save(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
@@ -699,7 +706,7 @@ async function loadPlans(){
   try{
     const r=await fetch(FN_URL,{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json'},body:JSON.stringify({action:'list'})});
     const j=await r.json();if(!j.ok)return;
-    plansLoadedAt=Date.now();planList=j.plans||[];fillSource();
+    plansLoadedAt=Date.now();planList=j.plans||[];fillSource();if(plDraft)fillFromPlan();
   }catch(e){}
 }
 async function choosePlan(id){
@@ -1015,6 +1022,7 @@ function renderSet(){
   const c=$('#clearSet');c.disabled=!setIds.length;c.textContent=clearArmed?'Tap again to clear':'Clear set';c.classList.toggle('danger',!!clearArmed);
 }
 function renderLib(){
+  $('#libSum').textContent=library.length+' songs';
   const q=$('#libSearch').value.trim().toLowerCase();
   const list=library.filter(s=>!q||(s.name||'').toLowerCase().includes(q)||s.id===editing)
     .sort((a,b)=>(a.name||'').localeCompare(b.name||''));
@@ -1222,6 +1230,7 @@ $('#lib').addEventListener('input',e=>{
   }
 });
 $('#addSong').addEventListener('click',async()=>{
+  if(!S.libOpen){S.libOpen=true;persist();renderLibToggle()}
   const s={id:newId(),name:'New song',key:S.key,bpm:S.bpm,meter:S.meter};
   library.push(s);editing=s.id;$('#libSearch').value='';renderLib();
   const n=$('#ed-name');if(n){n.focus();n.select();n.scrollIntoView({block:'nearest'})}
@@ -1534,6 +1543,7 @@ function renderPlEditor(){
     ol.appendChild(li);
   });
   $('#plAdd').hidden=locked;
+  fillFromPlan();
   $('#plSave').disabled=locked;$('#plSave').textContent=d.dirty?'Save':'Saved';
   $('#plDel').hidden=!d.id||locked;$('#plDel').textContent=plDelArmed?'Tap again to delete':'Delete';
   $('#plShow').disabled=!d.id;
@@ -1543,6 +1553,27 @@ function renderPlEditor(){
   $('#plNote').textContent=locked?'This shared playlist can only be changed by editors. You can still show it on this device.':'';
 }
 function plDirty(){plDraft.dirty=true;renderPlEditor()}
+function fillFromPlan(){
+  const sel=$('#plFromPlan');if(!sel||document.activeElement===sel)return;
+  if(!planList.length){loadPlans();}
+  sel.innerHTML='';sel.append(new Option(planList.length?'Choose a Planning Center service…':'Loading services…',''));
+  planList.forEach(p=>{const d=new Date(p.date).toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'});sel.append(new Option(d+(p.title?' · '+p.title:'')+(p.upcoming?' (upcoming)':''),p.id))});
+}
+async function plCopyPlan(pid){
+  const sel=$('#plFromPlan'),label=(sel.selectedOptions[0]||{}).textContent||'that service';
+  sel.disabled=true;plMsg('Copying songs from '+label+'…');
+  try{
+    const r=await fetch(FN_URL,{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json'},body:JSON.stringify({action:'plan_songs',pin,plan_id:pid})});
+    const j=await r.json().catch(()=>({}));
+    if(!j.ok){plMsg("Couldn't copy that service: "+(j.error||'unknown error'));return}
+    if(!j.items.length){plMsg('That service has no songs yet.');return}
+    const wasEmpty=!plDraft.items.length&&!$('#plName').value.trim();
+    j.items.forEach(it=>{if(!library.some(s=>s.id===it.song.id))library.push(it.song);plDraft.items.push({song_id:it.song.id,key:it.key==null?it.song.key:it.key,arr:it.arrangement_id||null})});
+    if(wasEmpty){plDraft.name=label.replace(/ \(upcoming\)$/,'');$('#plName').value=plDraft.name}
+    plDirty();plMsg(`Added ${j.items.length} songs from ${label}. Change, reorder or remove them, then Save.`,true);
+  }catch(e){plMsg("Couldn't reach Planning Center. Check the internet connection.")}
+  finally{sel.disabled=false;sel.value=''}
+}
 async function plSearch(){
   const q=$('#plSearch').value.trim(),ul=$('#plResults'),seq=++plSearchSeq;
   ul.innerHTML='';if(q.length<2)return;
@@ -1614,6 +1645,7 @@ $('#plItems').addEventListener('click',e=>{
   if(b.dataset.up!==undefined||b.dataset.down!==undefined){const i=+(b.dataset.up??b.dataset.down),j=b.dataset.up!==undefined?i-1:i+1;if(j<0||j>=it.length)return;[it[i],it[j]]=[it[j],it[i]];plDirty();return}
   if(b.dataset.rm!==undefined){it.splice(+b.dataset.rm,1);plDirty()}
 });
+$('#plFromPlan').addEventListener('change',e=>{if(e.target.value)plCopyPlan(e.target.value)});
 $('#plSearch').addEventListener('input',()=>{clearTimeout(plSearchTimer);plSearchTimer=setTimeout(plSearch,350)});
 $('#plResults').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
@@ -1643,6 +1675,10 @@ function renderCtlTabs(){
   document.querySelectorAll('.main>[data-panel]').forEach(p=>p.classList.toggle('tab-on',p.dataset.panel===S.ctlTab));
 }
 $('#ctlTabs').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;S.ctlTab=b.dataset.tab;persist();renderCtlTabs()});
+function renderLibToggle(){
+  const open=!!S.libOpen;$('#libBody').hidden=!open;$('#libToggle').setAttribute('aria-expanded',String(open));
+}
+$('#libToggle').addEventListener('click',()=>{S.libOpen=!S.libOpen;persist();renderLibToggle()});
 function renderRouteToggle(){
   const open=!!S.routingOpen;$('#routeBody').hidden=!open;
   $('#routeToggle').setAttribute('aria-expanded',String(open));
@@ -1695,6 +1731,7 @@ try{if(navigator.audioSession)navigator.audioSession.type='playback'}catch(e){}
 
 rebuildSet();
 renderRouteToggle();
+renderLibToggle();
 renderCtlTabs();
 setView(S.view);
 applyLock();
