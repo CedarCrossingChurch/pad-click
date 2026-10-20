@@ -242,6 +242,9 @@ body.hide-click.hide-pad .both,body.hide-click.hide-pad .routing,body.hide-click
 .presets button[aria-pressed="true"]{border-color:var(--fg);background:var(--panel-2);box-shadow:inset 3px 0 0 var(--click)}
 .panel-checks{display:flex;flex-wrap:wrap;gap:10px 20px}
 .panel-checks .check{font-size:15px}
+.presets button{position:relative}
+.presets .mine{position:absolute;top:10px;right:12px;font-style:normal;font-family:var(--f-mono);font-size:11px;color:var(--pad)}
+#layoutPane .pl-row input[type=text]{flex:1 1 200px}
 @container ctl (max-height:300px){
   body.view-split #controls header{display:none}
 }
@@ -551,15 +554,9 @@ body.locked .signed-only{display:none!important}
 <section class="team" id="layoutPane" hidden aria-label="Layout on this device">
   <div class="team-card">
     <div class="setlist-head"><h2>Layout on this device</h2><button id="layoutClose">Done</button></div>
-    <p class="note">Choose what this iPad or computer shows. Each device remembers its own choice, so the sound booth, drummer, keys player and guitar or bass can each see just what they need.</p>
+    <p class="note">Choose what to show, so the sound booth, drummer, keys player and guitar or bass can each see just what they need. <span id="lyWho"></span></p>
     <h3>Quick picks</h3>
-    <div class="presets" id="presets">
-      <button data-p="all"><b>Everything</b><span>Click and pad side by side above the chord chart. For whoever runs the pad and click.</span></button>
-      <button data-p="mixer"><b>Click &amp; pad</b><span>Full click and pad controls with the setlist. No chords.</span></button>
-      <button data-p="drums"><b>Drums</b><span>Click and the setlist. No pad, no chords.</span></button>
-      <button data-p="keys"><b>Keys</b><span>Pad controls above the chord chart, in place of a pad app plus a chord app.</span></button>
-      <button data-p="chords"><b>Chords only</b><span>Chord chart and setlist for guitar, bass and vocals. No audio.</span></button>
-    </div>
+    <div class="presets" id="presets"></div>
     <h3>Or pick and choose</h3>
     <div class="panel-checks" id="panelChecks">
       <label class="check"><input type="checkbox" data-panel="click"> Click</label>
@@ -568,6 +565,14 @@ body.locked .signed-only{display:none!important}
       <label class="check"><input type="checkbox" data-panel="chart"> Chord chart</label>
     </div>
     <p class="note">With the chord chart on, the setlist shows as a row of song buttons above the chart. Drag the bar between the controls and the chart to resize them.</p>
+    <div class="signed-only" style="display:grid;gap:10px">
+      <h3>Save this layout</h3>
+      <p class="note">Saves what's showing, the divider position, and the chart text size and columns. Pick a saved layout above to edit or delete it.</p>
+      <div class="pl-row"><input type="text" id="lyName" maxlength="40" placeholder="Layout name, e.g. Bass" aria-label="Layout name"><input type="text" id="lyDesc" maxlength="160" placeholder="Short description (optional)" aria-label="Layout description"></div>
+      <label class="check admin-only"><input type="checkbox" id="lyShared"> Share with the whole team</label>
+      <div class="pl-actions"><button id="lySaveNew">Save as a new layout</button><button id="lyUpdate" hidden>Update</button><button id="lyDelete" class="danger" hidden>Delete</button></div>
+      <div class="err" id="lyMsg" role="status"></div>
+    </div>
   </div>
 </section>
 
@@ -602,7 +607,7 @@ const DEF={key:7,padVol:70,tone:45,shimmer:30,fade:4,voicing:'open',bpm:72,meter
 function load(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}
 function save(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
 const S=Object.assign({},DEF,load('wpc.settings')||{});
-function persist(){save('wpc.settings',S)}
+function persist(){save('wpc.settings',S);queueLayoutSync()}
 
 /* shared song library: last synced copy is kept on this device for offline use */
 let library=[], setIds=[], setMeta=[], bandSet=[], playlists=[], syncedAt=null;
@@ -761,7 +766,7 @@ async function choosePlan(id){
   }catch(e){say("Couldn't reach Planning Center sync. Check the internet connection.")}
   await pull();
 }
-function lock(){pin=null;me=null;playlists=[];plDraft=null;$('#plPane').hidden=true;try{['pc.pin','pc.me','pc.playlists'].forEach(k=>{localStorage.removeItem(k);sessionStorage.removeItem(k)});Object.keys(localStorage).filter(k=>k.startsWith('pc.chart.')).forEach(k=>localStorage.removeItem(k))}catch(e){}$('#teamPane').hidden=true;applyLock()}
+function lock(){pin=null;me=null;layoutLoadedFor=null;lastLayoutJSON=null;presets=presets.filter(p=>p.shared);try{localStorage.setItem('pc.presets',JSON.stringify(presets))}catch(e){}playlists=[];plDraft=null;$('#plPane').hidden=true;try{['pc.pin','pc.me','pc.playlists'].forEach(k=>{localStorage.removeItem(k);sessionStorage.removeItem(k)});Object.keys(localStorage).filter(k=>k.startsWith('pc.chart.')).forEach(k=>localStorage.removeItem(k))}catch(e){}$('#teamPane').hidden=true;applyLock()}
 
 let statusTimer;
 function say(msg){const el=$('#status');el.textContent=msg;clearTimeout(statusTimer)}
@@ -1294,7 +1299,7 @@ async function signIn(v,remember,err){
     if(r&&r.status==='ok'){
       pin=v;me={name:r.name,role:r.role};
       try{const st=remember?localStorage:sessionStorage;st.setItem('pc.pin',v);st.setItem('pc.me',JSON.stringify(me))}catch(x){}
-      err.textContent='';applyLock();
+      err.textContent='';applyLock();loadMyLayout(true);
       say('Signed in as '+me.name+'.'+(me.role==='viewer'?'':' Changes are recorded under your name.'));
       return true;
     }
@@ -1308,7 +1313,7 @@ async function verifyMe(){
     if(r&&r.status==='ok'){
       me={name:r.name,role:r.role};
       try{(localStorage.getItem('pc.pin')?localStorage:sessionStorage).setItem('pc.me',JSON.stringify(me))}catch(e){}
-      applyLock();
+      applyLock();loadMyLayout(false);
     }else if(r&&r.status==='bad_pin'){lock();say('Your saved PIN no longer works. Sign in again.')}
   }catch(e){}
 }
@@ -1718,7 +1723,22 @@ $('#practiceExit').addEventListener('click',()=>showLocal(null));
 
 /* output routing: collapsed unless opened */
 const PRESETS={all:{click:true,pad:true,set:true,chart:true},mixer:{click:true,pad:true,set:true,chart:false},drums:{click:true,pad:false,set:true,chart:false},keys:{click:false,pad:true,set:true,chart:true},chords:{click:false,pad:false,set:true,chart:true}};
-const PRESET_NAMES={all:'Everything',mixer:'Click & pad',drums:'Drums',keys:'Keys',chords:'Chords only'};
+const BUILTIN_PRESETS=[
+  {id:'builtin-all',name:'Everything',description:'Click and pad side by side above the chord chart. For whoever runs the pad and click.',layout:{panels:PRESETS.all,split:0.34},shared:true},
+  {id:'builtin-mixer',name:'Click & pad',description:'Full click and pad controls with the setlist. No chords.',layout:{panels:PRESETS.mixer},shared:true},
+  {id:'builtin-drums',name:'Drums',description:'Click and the setlist. No pad, no chords.',layout:{panels:PRESETS.drums},shared:true},
+  {id:'builtin-keys',name:'Keys',description:'Pad controls above the chord chart, in place of a pad app plus a chord app.',layout:{panels:PRESETS.keys,split:0.3},shared:true},
+  {id:'builtin-chords',name:'Chords only',description:'Chord chart and setlist for guitar, bass and vocals. No audio.',layout:{panels:PRESETS.chords},shared:true}];
+let presets=(()=>{try{const p=JSON.parse(localStorage.getItem('pc.presets')||'null');return Array.isArray(p)&&p.length?p:BUILTIN_PRESETS}catch(e){return BUILTIN_PRESETS}})();
+const LY_MSG={need_name:'Give the layout a name.',not_allowed:'Only admins can change layouts shared with the team.',not_found:'That layout was deleted.',bad_layout:'Pick at least one thing to show.',bad_pin:'Your PIN no longer works. Sign in again.',locked:'Too many wrong PIN tries. Wait 10 minutes.'};
+let lyDelArmed=null;
+const samePanels=(a,b)=>['click','pad','set','chart'].every(x=>!!(a||{})[x]===!!(b||{})[x]);
+function currentPreset(){
+  const byId=presets.find(p=>p.id===S.presetId);
+  if(byId&&samePanels(byId.layout.panels,S.panels))return byId;
+  return presets.find(p=>samePanels(p.layout.panels,S.panels))||null;
+}
+const canEditPreset=p=>!!(p&&pin&&me&&!String(p.id).startsWith('builtin-')&&(p.shared?me.role==='admin':true));
 function applyLayout(){
   const P=S.panels;
   if(!P.click&&!P.pad&&!P.set&&!P.chart)P.set=true;
@@ -1728,19 +1748,104 @@ function applyLayout(){
   document.body.classList.toggle('hide-set',!P.set&&view==='mixer');
   document.body.classList.toggle('custom-panels',!(P.click&&P.pad&&P.set));
   if(S.view!==view||!document.body.classList.contains('view-'+view))setView(view);
-  const preset=Object.keys(PRESETS).find(k=>['click','pad','set','chart'].every(x=>!!PRESETS[k][x]===!!P[x]));
-  document.querySelectorAll('.layout-btn').forEach(b=>b.textContent='Layout · '+(preset?PRESET_NAMES[preset]:'Custom'));
-  document.querySelectorAll('#presets button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.p===preset)));
+  const cp=currentPreset();
+  document.querySelectorAll('.layout-btn').forEach(b=>b.textContent='Layout · '+(cp?cp.name:'Custom'));
   document.querySelectorAll('#panelChecks input').forEach(i=>i.checked=!!P[i.dataset.panel]);
   if(!P.click&&running)clickStop();
   if(!P.pad&&padOn)padStop();
-  renderBoth();renderCtlTabs();
+  renderBoth();renderCtlTabs();renderPresets();
 }
-document.querySelectorAll('.layout-btn').forEach(b=>b.addEventListener('click',()=>{$('#layoutPane').hidden=false;applyLayout()}));
+function renderPresets(){
+  const box=$('#presets');if(!box)return;
+  const cp=currentPreset();
+  box.innerHTML='';
+  presets.forEach(p=>{
+    const b=document.createElement('button');b.dataset.id=p.id;b.setAttribute('aria-pressed',String(!!cp&&cp.id===p.id));
+    b.innerHTML='<b></b><span></span>'+(p.shared?'':'<i class="mine">Yours</i>');
+    b.querySelector('b').textContent=p.name;b.querySelector('span').textContent=p.description||'';
+    box.appendChild(b);
+  });
+  // editor
+  const ed=canEditPreset(cp);
+  $('#lyUpdate').hidden=!ed;$('#lyDelete').hidden=!ed;
+  if(ed){$('#lyUpdate').textContent=`Update “${cp.name}” to this layout`;$('#lyDelete').textContent=lyDelArmed?'Tap again to delete':`Delete “${cp.name}”`}
+  const nm=$('#lyName');
+  if(document.activeElement!==nm&&document.activeElement!==$('#lyDesc')){nm.value=ed?cp.name:'';$('#lyDesc').value=ed?(cp.description||''):''}
+  if(document.activeElement!==$('#lyShared'))$('#lyShared').checked=ed?!!cp.shared:false;
+  $('#lyWho').textContent=pin&&me?`Your layout follows you when you sign in as ${me.name} on any device.`:'Sign in to have your layout follow you to any iPad, phone or computer, and to save your own layouts.';
+}
+function useLayout(l){
+  if(!l)return;
+  if(l.panels)S.panels=Object.assign({click:false,pad:false,set:false,chart:false},l.panels);
+  if(l.split)S.split=+l.split;
+  if(l.chartSize)S.chartSize=+l.chartSize;
+  if(l.chartCols)S.chartCols=+l.chartCols;
+  applySplit();applyLayout();chartSig='';renderChart();
+}
+const currentLayout=()=>({panels:Object.assign({},S.panels),split:S.split,chartSize:S.chartSize,chartCols:S.chartCols});
+function lyMsg(t,ok){const e=$('#lyMsg');e.textContent=t;e.classList.toggle('okmsg',!!ok)}
+async function savePreset(id){
+  const name=$('#lyName').value.trim();
+  if(!name){lyMsg(LY_MSG.need_name);$('#lyName').focus();return}
+  lyMsg('Saving…');
+  try{
+    const r=await rpc('save_preset',{p_pin:pin,p_id:id,p_name:name,p_description:$('#lyDesc').value.trim(),p_shared:$('#lyShared').checked,p_layout:currentLayout()});
+    if(r&&r.status==='ok'){S.presetId=r.id;persist();await loadMyLayout(true,false);lyMsg(id?'Layout updated.':`Saved “${name}”.`,true)}
+    else{if(r&&r.status==='bad_pin')lock();lyMsg(LY_MSG[r&&r.status]||"That layout wasn't saved.")}
+  }catch(e){lyMsg("Couldn't save. Check the internet connection.")}
+}
+document.querySelectorAll('.layout-btn').forEach(b=>b.addEventListener('click',()=>{$('#layoutPane').hidden=false;lyMsg('');applyLayout();if(pin)loadMyLayout(true,false)}));
 $('#layoutClose').addEventListener('click',()=>{$('#layoutPane').hidden=true});
 $('#layoutPane').addEventListener('click',e=>{if(e.target.id==='layoutPane')$('#layoutPane').hidden=true});
-$('#presets').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;S.panels=Object.assign({},PRESETS[b.dataset.p]);persist();applyLayout();say('Layout: '+PRESET_NAMES[b.dataset.p]+'.')});
+$('#presets').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const p=presets.find(x=>x.id===b.dataset.id);if(!p)return;S.presetId=p.id;useLayout(p.layout);persist();lyMsg('');say('Layout: '+p.name+'.')});
 $('#panelChecks').addEventListener('change',e=>{const i=e.target;if(!i.dataset.panel)return;S.panels[i.dataset.panel]=i.checked;persist();applyLayout()});
+$('#lySaveNew').addEventListener('click',()=>savePreset(null));
+$('#lyUpdate').addEventListener('click',()=>{const cp=currentPreset();if(cp)savePreset(cp.id)});
+$('#lyDelete').addEventListener('click',async()=>{
+  const cp=currentPreset();if(!cp)return;
+  if(!lyDelArmed){lyDelArmed=setTimeout(()=>{lyDelArmed=null;renderPresets()},3000);renderPresets();return}
+  clearTimeout(lyDelArmed);lyDelArmed=null;
+  try{const r=await rpc('delete_preset',{p_pin:pin,p_id:cp.id});
+    if(r==='ok'){S.presetId=null;persist();await loadMyLayout(true,false);lyMsg(`Deleted “${cp.name}”. This device keeps the layout until you pick another.`,true)}
+    else{if(r==='bad_pin')lock();lyMsg(LY_MSG[r]||"Couldn't delete it.")}
+  }catch(e){lyMsg("Couldn't delete. Check the internet connection.")}
+});
+
+/* layouts follow the person: saved with their sign-in, loaded on any device */
+const LAYOUT_KEYS=['panels','split','chartSize','chartCols','libOpen','ctlTab','presetId'];
+let layoutLoadedFor=null, layoutSyncTimer=null, lastLayoutJSON=null;
+function layoutSnapshot(){const o={};LAYOUT_KEYS.forEach(k=>{if(S[k]!==undefined&&S[k]!==null)o[k]=S[k]});return o}
+function queueLayoutSync(){
+  try{
+    if(!pin||layoutLoadedFor!==pin)return;
+    const j=JSON.stringify(layoutSnapshot());if(j===lastLayoutJSON)return;
+    clearTimeout(layoutSyncTimer);
+    layoutSyncTimer=setTimeout(async()=>{try{const snap=layoutSnapshot();const r=await rpc('save_my_layout',{p_pin:pin,p_settings:snap});if(r==='ok')lastLayoutJSON=JSON.stringify(snap)}catch(e){}},1000);
+  }catch(e){}
+}
+async function loadMyLayout(force,applySettings=true){
+  if(!pin||(!force&&layoutLoadedFor===pin))return;
+  const forPin=pin;
+  try{
+    const r=await rpc('get_my_layout',{p_pin:pin});
+    if(pin!==forPin)return;
+    if(!r||r.status!=='ok'){if(r&&r.status==='bad_pin')lock();return}
+    presets=Array.isArray(r.presets)&&r.presets.length?r.presets:BUILTIN_PRESETS;
+    try{localStorage.setItem('pc.presets',JSON.stringify(presets))}catch(e){}
+    const st=r.settings||{};
+    if(applySettings&&st.panels){
+      LAYOUT_KEYS.forEach(k=>{if(st[k]!==undefined)S[k]=st[k]});
+      save('wpc.settings',S);
+      applySplit();renderLibToggle();applyLayout();chartSig='';renderChart();
+      lastLayoutJSON=JSON.stringify(layoutSnapshot());
+      layoutLoadedFor=forPin;
+    }else{
+      layoutLoadedFor=forPin;
+      if(applySettings&&!st.panels){lastLayoutJSON=null;queueLayoutSync()}
+    }
+    renderPresets();applyLayout();
+  }catch(e){}
+}
 function renderCtlTabs(){
   if(!['click','pad'].includes(S.ctlTab))S.ctlTab='click';
   document.querySelectorAll('#ctlTabs button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===S.ctlTab)));
@@ -1811,6 +1916,7 @@ applyLayout();
 applyLock();
 renderAll();
 if(pin)verifyMe();
+renderPresets();
 if(syncedAt)setSync('busy','Using copy from '+fmtTime(syncedAt)+' · checking…');
 renderPco();
 $('#pcoSync').addEventListener('click',()=>syncPco(true));
