@@ -1,7 +1,7 @@
 // Keeps the app working when the church Wi-Fi drops.
 // The app files and fonts are cached; the song library is cached by the app itself.
 // When you change index.html, bump CACHE (v1 -> v2) so every device picks up the new version.
-const CACHE = 'padclick-v9';
+const CACHE = 'padclick-v10';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
@@ -22,7 +22,8 @@ self.addEventListener('fetch', e => {
   if (url.hostname.endsWith('supabase.co')) return; // live data, handled by the app
   const sameSite = url.origin === self.location.origin;
   const fonts = url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com';
-  if (!sameSite && !fonts) return;
+  const pdfViewer = url.hostname === 'cdn.jsdelivr.net' && url.pathname.startsWith('/npm/pdfjs-dist@'); // PDF chart viewer
+  if (!sameSite && !fonts && !pdfViewer) return;
 
   // Serve the saved copy right away, and refresh it in the background.
   e.respondWith(caches.open(CACHE).then(async cache => {
