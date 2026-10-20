@@ -202,9 +202,10 @@ body.view-split #controls header{flex:0 0 auto;gap:6px 10px}
 body.view-split #controls header>h1,body.view-split #controls header>.row:first-of-type,body.view-split #controls header .views,body.view-split #controls .status{display:none}
 body.view-split #controls header .lock{padding:6px 10px}
 body.view-split .route-chip,body.view-split .routing{display:none}
-body.view-split .main{flex:1 1 auto;min-height:0;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(250px,300px);align-items:stretch;gap:10px}
+body.view-split .main{flex:1 1 auto;min-height:0;grid-template-columns:minmax(0,1fr);align-items:stretch;gap:10px}
+body.view-split:not(.hide-click):not(.hide-pad) .main{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+body.view-split .setlist{display:none!important}
 body.view-split .main>*{min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
-body.view-split .setlist{grid-column:auto;align-content:start}
 body.view-split .strip{gap:10px;padding-bottom:12px;align-content:start}
 body.view-split .strip>*:not(.scribble){margin:0 12px}
 body.view-split .scribble{padding:6px 12px;position:sticky;top:0;z-index:1}
@@ -216,14 +217,31 @@ body.view-split .nudge{height:50px;width:46px;font-size:24px}
 body.view-split .beats{height:20px}
 body.view-split .big{font-size:16px;padding:9px 12px}
 body.view-split .key{font-size:20px;padding:8px 0}
-body.view-split .keys{gap:6px}
+body.view-split .keys{gap:6px;grid-template-columns:repeat(6,minmax(0,1fr))}
+body.view-split .key{font-size:18px;padding:7px 0}
 body.view-split .main .seg button{padding:7px 4px;font-size:12px}
-body.view-split .setlist{padding:10px 10px 12px;gap:10px}
-@container ctl (max-width:880px){
-  body.view-split .ctl-tabs{display:flex;flex:0 0 auto}
-  body.view-split .main{grid-template-columns:minmax(0,1fr)}
-  body.view-split .main>:not(.tab-on){display:none}
+@container ctl (max-width:519px){
+  body.view-split:not(.hide-click):not(.hide-pad) .main{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(0,1fr)}
 }
+@container ctl (max-width:519px) and (max-height:439px){
+  body.view-split:not(.hide-click):not(.hide-pad) .ctl-tabs{display:flex;flex:0 0 auto}
+  body.view-split:not(.hide-click):not(.hide-pad) .main{grid-template-rows:minmax(0,1fr)}
+  body.view-split:not(.hide-click):not(.hide-pad) .main>:not(.tab-on){display:none}
+}
+/* panels this device doesn't use */
+body.hide-click .strip.click,body.hide-pad .strip.pad,body.hide-set .setlist{display:none!important}
+body.custom-panels.view-mixer .main{grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}
+body.custom-panels.view-mixer .setlist{grid-column:auto}
+body.hide-click.hide-pad .both,body.hide-click.hide-pad .routing,body.hide-click.hide-pad .route-chip{display:none!important}
+/* Layout sheet */
+.layout-btn{font-size:13px;padding:7px 12px}
+.presets{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:8px}
+.presets button{display:grid;gap:4px;text-align:left;padding:12px}
+.presets button b{font-family:var(--f-display);font-size:18px;letter-spacing:.04em;text-transform:uppercase}
+.presets button span{font-size:13px;color:var(--muted)}
+.presets button[aria-pressed="true"]{border-color:var(--fg);background:var(--panel-2);box-shadow:inset 3px 0 0 var(--click)}
+.panel-checks{display:flex;flex-wrap:wrap;gap:10px 20px}
+.panel-checks .check{font-size:15px}
 @container ctl (max-height:300px){
   body.view-split #controls header{display:none}
 }
@@ -337,7 +355,7 @@ body.locked .signed-only{display:none!important}
       <button class="lock" id="lockBtn">Sign in</button>
       <button class="lock signed-only" id="plBtn">Playlists</button>
       <button class="lock admin-only" id="teamBtn">Team</button>
-      <div class="seg views" role="group" aria-label="Layout"><button data-view="mixer">Mixer</button><button data-view="split">Split</button><button data-view="chart">Chart</button></div>
+      <button class="layout-btn" aria-haspopup="dialog">Layout</button>
     </div>
     <form class="unlock" id="unlockForm" hidden>
       <label class="label" for="pinInput">Your PIN</label>
@@ -350,7 +368,7 @@ body.locked .signed-only{display:none!important}
     <div class="status" id="status" role="status" aria-live="polite" style="flex-basis:100%">Press Space or Start pad + click to start both. Pick a key to change the pad.</div>
   </header>
 
-  <div class="seg ctl-tabs" id="ctlTabs" role="tablist" aria-label="Controls"><button data-tab="click">Click</button><button data-tab="pad">Pad</button><button data-tab="set">Setlist</button></div>
+  <div class="seg ctl-tabs" id="ctlTabs" role="tablist" aria-label="Controls"><button data-tab="click">Click</button><button data-tab="pad">Pad</button></div>
   <div class="main">
     <!-- CLICK STRIP -->
     <section class="strip click" aria-label="Click" data-panel="click">
@@ -501,7 +519,7 @@ body.locked .signed-only{display:none!important}
       <button id="chSmaller" aria-label="Smaller chart text">A−</button>
       <button id="chBigger" aria-label="Larger chart text">A+</button>
       <button id="chCols" aria-label="Switch between one and two columns">1 col</button>
-      <div class="seg views" role="group" aria-label="Layout"><button data-view="mixer">Mixer</button><button data-view="split">Split</button><button data-view="chart">Chart</button></div>
+      <button class="layout-btn" aria-haspopup="dialog">Layout</button>
     </div>
   </div>
   <nav class="chart-set" id="chartSet" aria-label="Setlist"></nav>
@@ -527,6 +545,29 @@ body.locked .signed-only{display:none!important}
       <div class="pl-actions"><button id="plSave">Save</button><button id="plShow">Show on this device</button><button id="plUse">Make it the band setlist</button><button id="plDel" class="danger">Delete</button></div>
     </div>
     <div class="err" id="plMsg" role="status"></div>
+  </div>
+</section>
+
+<section class="team" id="layoutPane" hidden aria-label="Layout on this device">
+  <div class="team-card">
+    <div class="setlist-head"><h2>Layout on this device</h2><button id="layoutClose">Done</button></div>
+    <p class="note">Choose what this iPad or computer shows. Each device remembers its own choice, so the sound booth, drummer, keys player and guitar or bass can each see just what they need.</p>
+    <h3>Quick picks</h3>
+    <div class="presets" id="presets">
+      <button data-p="all"><b>Everything</b><span>Click and pad side by side above the chord chart. For whoever runs the pad and click.</span></button>
+      <button data-p="mixer"><b>Click &amp; pad</b><span>Full click and pad controls with the setlist. No chords.</span></button>
+      <button data-p="drums"><b>Drums</b><span>Click and the setlist. No pad, no chords.</span></button>
+      <button data-p="keys"><b>Keys</b><span>Pad controls above the chord chart, in place of a pad app plus a chord app.</span></button>
+      <button data-p="chords"><b>Chords only</b><span>Chord chart and setlist for guitar, bass and vocals. No audio.</span></button>
+    </div>
+    <h3>Or pick and choose</h3>
+    <div class="panel-checks" id="panelChecks">
+      <label class="check"><input type="checkbox" data-panel="click"> Click</label>
+      <label class="check"><input type="checkbox" data-panel="pad"> Pad</label>
+      <label class="check"><input type="checkbox" data-panel="set"> Setlist</label>
+      <label class="check"><input type="checkbox" data-panel="chart"> Chord chart</label>
+    </div>
+    <p class="note">With the chord chart on, the setlist shows as a row of song buttons above the chart. Drag the bar between the controls and the chart to resize them.</p>
   </div>
 </section>
 
@@ -974,15 +1015,22 @@ function renderPad(){
   $('#fade').value=S.fade;$('#fadeV').textContent=S.fade+' s';
   renderBoth();
 }
+const useClick=()=>!(S.panels&&S.panels.click===false), usePad=()=>!(S.panels&&S.panels.pad===false);
 function renderBoth(){
-  const all=running&&padOn;
+  const c=useClick(),p=usePad();
+  const on=(c?running:true)&&(p?padOn:true)&&(c||p);
+  const what=c&&p?'pad + click':c?'click':'pad';
+  const sub=c&&p?`${KEYS[S.key]} · ${S.bpm} BPM`:c?`${S.bpm} BPM`:KEYS[S.key];
   ['#both','#chBoth'].forEach(sel=>{const b=$(sel);if(!b)return;
-    b.classList.toggle('stop',all);
-    b.innerHTML=all?'Stop both':`Start pad + click<small>${KEYS[S.key]} · ${S.bpm} BPM</small>`;});
+    b.hidden=!c&&!p;
+    b.classList.toggle('stop',on);
+    b.innerHTML=on?(c&&p?'Stop both':'Stop '+what):`Start ${what}<small>${sub}</small>`;});
 }
 function toggleBoth(){
-  if(running&&padOn){clickStop();padStop();say(`Pad fading out over ${S.fade} s. Click stopped.`)}
-  else{if(!padOn)padPlay(S.key);if(!running)clickStart();say(`Pad in ${KEYS[S.key]}, click at ${S.bpm} BPM in ${S.meter}.`)}
+  const c=useClick(),p=usePad();if(!c&&!p)return;
+  const on=(c?running:true)&&(p?padOn:true);
+  if(on){if(c)clickStop();if(p)padStop();say(c&&p?`Pad fading out over ${S.fade} s. Click stopped.`:c?'Click stopped.':`Pad fading out over ${S.fade} s.`)}
+  else{if(p&&!padOn)padPlay(S.key);if(c&&!running)clickStart();say(c&&p?`Pad in ${KEYS[S.key]}, click at ${S.bpm} BPM in ${S.meter}.`:c?`Click at ${S.bpm} BPM in ${S.meter}.`:`Pad in ${KEYS[S.key]}.`)}
   renderBoth();
 }
 function renderBeats(){
@@ -1669,8 +1717,32 @@ $('#viewList').addEventListener('change',e=>showLocal(e.target.value));
 $('#practiceExit').addEventListener('click',()=>showLocal(null));
 
 /* output routing: collapsed unless opened */
+const PRESETS={all:{click:true,pad:true,set:true,chart:true},mixer:{click:true,pad:true,set:true,chart:false},drums:{click:true,pad:false,set:true,chart:false},keys:{click:false,pad:true,set:true,chart:true},chords:{click:false,pad:false,set:true,chart:true}};
+const PRESET_NAMES={all:'Everything',mixer:'Click & pad',drums:'Drums',keys:'Keys',chords:'Chords only'};
+function applyLayout(){
+  const P=S.panels;
+  if(!P.click&&!P.pad&&!P.set&&!P.chart)P.set=true;
+  const view=P.chart?((P.click||P.pad)?'split':'chart'):'mixer';
+  document.body.classList.toggle('hide-click',!P.click);
+  document.body.classList.toggle('hide-pad',!P.pad);
+  document.body.classList.toggle('hide-set',!P.set&&view==='mixer');
+  document.body.classList.toggle('custom-panels',!(P.click&&P.pad&&P.set));
+  if(S.view!==view||!document.body.classList.contains('view-'+view))setView(view);
+  const preset=Object.keys(PRESETS).find(k=>['click','pad','set','chart'].every(x=>!!PRESETS[k][x]===!!P[x]));
+  document.querySelectorAll('.layout-btn').forEach(b=>b.textContent='Layout · '+(preset?PRESET_NAMES[preset]:'Custom'));
+  document.querySelectorAll('#presets button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.p===preset)));
+  document.querySelectorAll('#panelChecks input').forEach(i=>i.checked=!!P[i.dataset.panel]);
+  if(!P.click&&running)clickStop();
+  if(!P.pad&&padOn)padStop();
+  renderBoth();renderCtlTabs();
+}
+document.querySelectorAll('.layout-btn').forEach(b=>b.addEventListener('click',()=>{$('#layoutPane').hidden=false;applyLayout()}));
+$('#layoutClose').addEventListener('click',()=>{$('#layoutPane').hidden=true});
+$('#layoutPane').addEventListener('click',e=>{if(e.target.id==='layoutPane')$('#layoutPane').hidden=true});
+$('#presets').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;S.panels=Object.assign({},PRESETS[b.dataset.p]);persist();applyLayout();say('Layout: '+PRESET_NAMES[b.dataset.p]+'.')});
+$('#panelChecks').addEventListener('change',e=>{const i=e.target;if(!i.dataset.panel)return;S.panels[i.dataset.panel]=i.checked;persist();applyLayout()});
 function renderCtlTabs(){
-  if(!['click','pad','set'].includes(S.ctlTab))S.ctlTab='click';
+  if(!['click','pad'].includes(S.ctlTab))S.ctlTab='click';
   document.querySelectorAll('#ctlTabs button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tab===S.ctlTab)));
   document.querySelectorAll('.main>[data-panel]').forEach(p=>p.classList.toggle('tab-on',p.dataset.panel===S.ctlTab));
 }
@@ -1717,8 +1789,8 @@ document.addEventListener('keydown',e=>{
   const tag=(e.target.tagName||'').toLowerCase();
   if(tag==='input'||tag==='select'||tag==='textarea')return;
   if(e.key===' '){e.preventDefault();toggleBoth()}
-  else if(e.key==='c'||e.key==='C'){running?clickStop():clickStart()}
-  else if(e.key==='p'||e.key==='P'){padOn?padStop():padPlay(S.key)}
+  else if((e.key==='c'||e.key==='C')&&useClick()){running?clickStop():clickStart()}
+  else if((e.key==='p'||e.key==='P')&&usePad()){padOn?padStop():padPlay(S.key)}
   else if(e.key==='t'||e.key==='T'){tap()}
   else if(e.key==='ArrowUp'){e.preventDefault();setBpm(S.bpm+1)}
   else if(e.key==='ArrowDown'){e.preventDefault();setBpm(S.bpm-1)}
@@ -1729,11 +1801,13 @@ document.addEventListener('keydown',e=>{
 /* iPad/iPhone: play through the silent switch like a music app */
 try{if(navigator.audioSession)navigator.audioSession.type='playback'}catch(e){}
 
+if(!S.panels||typeof S.panels!=='object'){S.panels=S.view==='split'?Object.assign({},PRESETS.all):S.view==='chart'?Object.assign({},PRESETS.chords):Object.assign({},PRESETS.mixer);persist()}
 rebuildSet();
 renderRouteToggle();
 renderLibToggle();
 renderCtlTabs();
 setView(S.view);
+applyLayout();
 applyLock();
 renderAll();
 if(pin)verifyMe();
