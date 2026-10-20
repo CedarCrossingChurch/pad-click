@@ -287,6 +287,14 @@ body.view-chart .audio-only{display:none!important}
 .sheet .gap{height:.5em}
 .sheet .note-line{color:var(--muted);font-style:italic;font-size:.85em}
 .chart-empty{color:var(--muted);max-width:56ch;display:grid;gap:12px;padding-block:24px}
+.pdfbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}
+.pdfbar button{min-height:40px;padding:6px 12px;font-size:14px}
+.pdfbar button[aria-pressed="true"]{border-color:var(--pad);color:var(--text)}
+.pdfpages{display:flex;flex-direction:column;align-items:center;gap:14px;min-height:120px}
+.pdfpages.cols2{flex-direction:row;flex-wrap:wrap;justify-content:center;align-items:flex-start}
+.pdfpages canvas{display:block;max-width:none;background:#fff;border-radius:4px;box-shadow:0 1px 0 var(--line)}
+.pdfpages.dark canvas{filter:invert(1) hue-rotate(180deg);background:#000}
+.pdfpages .chart-empty{padding-block:8px}
 .chart-signin{display:flex;flex-wrap:wrap;gap:8px;align-items:center;max-width:56ch;padding-block:24px}
 .chart-signin p{flex-basis:100%;margin:0;color:var(--fg);font-size:16px}
 .chart-signin input{width:160px;font-size:18px;letter-spacing:.2em}
@@ -766,7 +774,7 @@ async function choosePlan(id){
   }catch(e){say("Couldn't reach Planning Center sync. Check the internet connection.")}
   await pull();
 }
-function lock(){pin=null;me=null;layoutLoadedFor=null;lastLayoutJSON=null;presets=presets.filter(p=>p.shared);try{localStorage.setItem('pc.presets',JSON.stringify(presets))}catch(e){}playlists=[];plDraft=null;$('#plPane').hidden=true;try{['pc.pin','pc.me','pc.playlists'].forEach(k=>{localStorage.removeItem(k);sessionStorage.removeItem(k)});Object.keys(localStorage).filter(k=>k.startsWith('pc.chart.')).forEach(k=>localStorage.removeItem(k))}catch(e){}$('#teamPane').hidden=true;applyLock()}
+function lock(){pin=null;me=null;layoutLoadedFor=null;lastLayoutJSON=null;presets=presets.filter(p=>p.shared);try{localStorage.setItem('pc.presets',JSON.stringify(presets))}catch(e){}playlists=[];plDraft=null;$('#plPane').hidden=true;try{['pc.pin','pc.me','pc.playlists'].forEach(k=>{localStorage.removeItem(k);sessionStorage.removeItem(k)});Object.keys(localStorage).filter(k=>k.startsWith('pc.chart.')).forEach(k=>localStorage.removeItem(k))}catch(e){}try{caches.delete('pc-pdfs')}catch(e){}if(pdfDoc){try{pdfDoc.doc.destroy()}catch(e){}pdfDoc=null}$('#teamPane').hidden=true;applyLock()}
 
 let statusTimer;
 function say(msg){const el=$('#status');el.textContent=msg;clearTimeout(statusTimer)}
@@ -1473,7 +1481,7 @@ async function fetchChart(s){
   try{
     const r=await fetch(FN_URL,{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json'},body:JSON.stringify({action:'chart',pin,song_id:s.id,arrangement_id:s.arr||null})});
     const j=await r.json().catch(()=>({}));
-    if(j.ok){try{localStorage.setItem('pc.chart.'+id,JSON.stringify({linked:j.linked,chart:j.chart||'',chart_key:j.chart_key||null,arrangement:j.arrangement||null,at:Date.now()}))}catch(e){}}
+    if(j.ok){try{localStorage.setItem('pc.chart.'+id,JSON.stringify({linked:j.linked,chart:j.chart||'',chart_key:j.chart_key||null,arrangement:j.arrangement||null,arrangement_id:j.arrangement_id||null,pdfs:Array.isArray(j.pdfs)?j.pdfs:[],at:Date.now()}))}catch(e){}}
     else if(r.status===403&&j.status==='bad_pin'){lock();say('Your PIN no longer works. Sign in again.')}
     else if(!readChart(id)){try{localStorage.setItem('pc.chart.'+id,JSON.stringify({error:j.error||"Couldn't load this chart.",at:Date.now()-540000}))}catch(e){}}
   }catch(e){}
@@ -1488,7 +1496,8 @@ function renderChart(){
   body.style.setProperty('--chart-size',S.chartSize+'px');
   if(document.body.classList.contains('view-mixer'))return;
   const c=s&&pin?readChart(ck(s)):null;
-  const sig=[!!pin,s&&s.id,s&&s.arr,s&&s.key,c&&c.at,S.chartCols].join('|');
+  const pdfMode=!!(c&&c.linked&&!c.error&&!(c.chart||'').trim()&&c.pdfs&&c.pdfs.length);
+  const sig=[!!pin,s&&s.id,s&&s.arr,s&&s.key,c&&c.at,S.chartCols,pdfMode?S.chartSize+'|'+(S.pdfLight?1:0)+'|'+(pdfPick[ck(s)]||''):''].join('|');
   if(sig===chartSig)return;chartSig=sig;
   if(!pin){
     body.innerHTML='<form class="chart-signin" id="chSignin"><p>Sign in with your PIN to see chord charts.</p><input type="password" id="chPin" inputmode="numeric" autocomplete="off" aria-label="Your PIN" maxlength="40"><button type="submit">Sign in</button><span class="err" id="chErr"></span></form>';
@@ -1499,12 +1508,90 @@ function renderChart(){
   if(Date.now()-c.at>600000&&navigator.onLine)fetchChart(s);
   if(c.error){body.innerHTML='<div class="chart-empty"><p>'+escH(c.error)+'</p></div>';return}
   if(!c.linked){body.innerHTML='<div class="chart-empty"><p>This song isn’t linked to Planning Center, so there’s no chart to show. Songs come in linked when they’re part of a synced plan.</p></div>';return}
-  if(!c.chart.trim()){body.innerHTML='<div class="chart-empty"><p>No chord chart is typed in Planning Center for this arrangement'+(c.arrangement?' ('+escH(c.arrangement)+')':'')+'. If its chart is a PDF, open it in Planning Center.</p></div>';return}
+  if(!c.chart.trim()&&c.pdfs===undefined){body.innerHTML='<div class="chart-empty"><p>Checking Planning Center for a PDF chart…</p></div>';fetchChart(s);return}
+  if(!c.chart.trim()&&c.pdfs.length){renderPdf(s,c,body);return}
+  if(!c.chart.trim()){body.innerHTML='<div class="chart-empty"><p>No chord chart is typed in Planning Center for this arrangement'+(c.arrangement?' ('+escH(c.arrangement)+')':'')+', and no PDF is attached to it.</p><p>To get chords that transpose, import the song from SongSelect in Planning Center and choose <b>ChordPro (Editable)</b>.</p></div>';return}
   const from=noteIdx(c.chart_key);const semis=from==null?0:(s.key-from+12)%12;
   const note=from==null?'Chart key isn’t set in Planning Center, so it’s shown as written.':semis?`Transposed from ${pretty(c.chart_key)} to ${KEYS[s.key]}.`:`Chart in ${KEYS[s.key]}.`;
   body.innerHTML='<p class="chart-note">'+escH(note)+(c.arrangement?' Arrangement: '+escH(c.arrangement)+'.':'')+'</p><div class="sheet'+(S.chartCols===2?' cols2':'')+'">'+sheetHtml(c.chart,semis,FLAT_KEYS.has(s.key))+'</div>';
   body.scrollTop=0;
 }
+/* PDF charts: shown as written when Planning Center has no typed chart (they can't be transposed) */
+const PDFJS='https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/legacy/build/';
+const pdfPick={};let pdfLib=null,pdfToken=0,pdfDoc=null,pdfShownW=0;
+function getPdfLib(){
+  // The worker reads the PDF off the main thread so the click keeps time. It's started from a local copy,
+  // which also lets it work offline once the app has saved it.
+  if(!pdfLib){pdfLib=Promise.all([import(PDFJS+'pdf.min.mjs'),fetch(PDFJS+'pdf.worker.min.mjs').then(r=>{if(!r.ok)throw new Error('PDF viewer did not load.');return r.blob()})])
+    .then(([m,w])=>{m.GlobalWorkerOptions.workerSrc=URL.createObjectURL(new Blob([w],{type:'text/javascript'}));return m});pdfLib.catch(()=>{pdfLib=null})}
+  return pdfLib;
+}
+async function getPdfBytes(s,c,att){
+  const key='./__pdf/'+encodeURIComponent(s.id)+'/'+encodeURIComponent(att.id);
+  let cache=null;
+  try{cache=await caches.open('pc-pdfs');const hit=await cache.match(key);if(hit)return new Uint8Array(await hit.arrayBuffer())}catch(e){}
+  const r=await fetch(FN_URL,{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json'},body:JSON.stringify({action:'chart_pdf',pin,song_id:s.id,arrangement_id:s.arr||c.arrangement_id||null,attachment_id:att.id})});
+  if((r.headers.get('content-type')||'').includes('application/pdf')){
+    const buf=await r.arrayBuffer();
+    try{if(cache)await cache.put(key,new Response(buf.slice(0),{headers:{'Content-Type':'application/pdf'}}))}catch(e){}
+    return new Uint8Array(buf);
+  }
+  const j=await r.json().catch(()=>({}));
+  if(r.status===403&&j.status==='bad_pin'){lock();say('Your PIN no longer works. Sign in again.')}
+  throw new Error(j.error||"Couldn't load the PDF.");
+}
+async function renderPdf(s,c,body){
+  const tok=++pdfToken,sel=c.pdfs.find(p=>p.id===pdfPick[ck(s)])||c.pdfs[0];
+  const picks=c.pdfs.length>1?c.pdfs.map(p=>`<button data-pdf="${escH(p.id)}" aria-pressed="${p.id===sel.id}">${escH(p.name)}</button>`).join(''):'';
+  body.innerHTML='<p class="chart-note">PDF from Planning Center, shown as written. It can’t be transposed to '+escH(KEYS[s.key])+'; for that, import the song from SongSelect as ChordPro (Editable).</p>'+
+    '<div class="pdfbar">'+picks+`<button data-pdflight aria-pressed="${!!S.pdfLight}">Light page</button></div>`+
+    '<div class="pdfpages'+(S.chartCols===2?' cols2':'')+(S.pdfLight?'':' dark')+'"><div class="chart-empty"><p>Loading the PDF…</p></div></div>';
+  body.scrollTop=0;
+  const box=body.querySelector('.pdfpages');
+  try{
+    const docKey=ck(s)+'/'+sel.id;
+    if(!pdfDoc||pdfDoc.key!==docKey){
+      const [lib,bytes]=await Promise.all([getPdfLib(),getPdfBytes(s,c,sel)]);
+      if(tok!==pdfToken)return;
+      if(pdfDoc)try{pdfDoc.doc.destroy()}catch(e){}
+      pdfDoc={key:docKey,doc:await lib.getDocument({data:bytes}).promise};
+      if(tok!==pdfToken)return;
+    }
+    const doc=pdfDoc.doc,two=S.chartCols===2&&doc.numPages>1;
+    const avail=Math.max(200,box.clientWidth),zoom=S.chartSize/20;
+    const w=Math.round(Math.min(avail*Math.max(zoom,0.6),avail*2.5)/(two?2:1)-(two?8:0));
+    const dpr=Math.min(window.devicePixelRatio||1,3);
+    for(let i=1;i<=doc.numPages;i++){
+      const page=await doc.getPage(i);if(tok!==pdfToken)return;
+      const base=page.getViewport({scale:1});let sc=(w/base.width)*dpr;
+      const px=base.width*base.height*sc*sc;if(px>8e6)sc*=Math.sqrt(8e6/px); // keeps older iPads within canvas memory
+      const vp=page.getViewport({scale:sc});
+      const cv=document.createElement('canvas');cv.width=Math.floor(vp.width);cv.height=Math.floor(vp.height);
+      cv.style.width=w+'px';cv.style.height=Math.round(w*base.height/base.width)+'px';cv.setAttribute('role','img');cv.setAttribute('aria-label',`${sel.name}, page ${i} of ${doc.numPages}`);
+      await page.render({canvas:cv,canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+      if(tok!==pdfToken)return;
+      if(i===1)box.innerHTML='';
+      box.appendChild(cv);
+    }
+    pdfShownW=body.clientWidth;
+  }catch(e){
+    if(tok!==pdfToken)return;
+    box.innerHTML='<div class="chart-empty"><p>'+escH(navigator.onLine?(e&&e.message)||"Couldn't show the PDF.":'This PDF hasn’t been opened on this device yet, so it isn’t saved for offline use. Open it once while online.')+'</p></div>';
+  }
+}
+$('#chartBody').addEventListener('click',e=>{
+  const p=e.target.closest('[data-pdf]'),l=e.target.closest('[data-pdflight]');
+  const s=currentSong();if(!s||(!p&&!l))return;
+  if(p)pdfPick[ck(s)]=p.dataset.pdf;
+  if(l){S.pdfLight=!S.pdfLight;persist()}
+  chartSig='';renderChart();
+});
+// Re-draw the PDF when the chart pane changes width (rotation, divider, split)
+try{new ResizeObserver(()=>{
+  if(!document.querySelector('#chartBody .pdfpages canvas'))return;
+  const w=$('#chartBody').clientWidth;if(Math.abs(w-pdfShownW)<40)return;
+  clearTimeout(window.__pdfRz);window.__pdfRz=setTimeout(()=>{chartSig='';renderChart()},250);
+}).observe($('#chartBody'))}catch(e){}
 $('#chartBody').addEventListener('submit',async e=>{
   if(e.target.id!=='chSignin')return;e.preventDefault();
   await signIn($('#chPin').value.trim(),true,$('#chErr'));
