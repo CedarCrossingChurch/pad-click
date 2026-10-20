@@ -62,6 +62,16 @@ h1 span{color:var(--muted);font-weight:500}
 @media (max-width:700px){.main{grid-template-columns:minmax(0,1fr)}}
 
 .strip{background:var(--panel);border:1px solid var(--line);border-radius:6px;display:grid;gap:16px;padding:0 0 18px;overflow:hidden}
+/* Now playing: shown when the chord chart (which has its own title) is hidden */
+.now-bar{display:none}
+body.view-mixer .now-bar{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.now-title{flex:1 1 auto;min-width:0;display:grid;gap:2px}
+.now-title small{font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.now-title b{font-family:var(--f-display);font-size:30px;line-height:1.05;font-weight:700;text-transform:uppercase;letter-spacing:.04em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.now-title span{font-family:var(--f-mono);font-size:13px;color:var(--muted)}
+.now-next{flex:0 1 auto;min-width:0;max-width:34%;font-family:var(--f-mono);font-size:13px;color:var(--muted);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.now-next b{color:var(--fg);font-weight:600}
+@media (max-width:560px){.now-next{display:none}.now-title b{font-size:24px}}
 .strip>*:not(.scribble){margin:0 16px}
 .scribble{display:flex;align-items:baseline;justify-content:space-between;padding:10px 16px;font-family:var(--f-display);text-transform:uppercase}
 .scribble b{font-size:24px;font-weight:700;letter-spacing:.08em;color:#0E1114}
@@ -378,6 +388,13 @@ body.locked .signed-only{display:none!important}
     </form>
     <div class="status" id="status" role="status" aria-live="polite" style="flex-basis:100%">Press Space or Start pad + click to start both. Pick a key to change the pad.</div>
   </header>
+
+  <div class="now-bar" id="nowBar">
+    <button class="nav" id="nowPrev" aria-label="Previous song">◀</button>
+    <div class="now-title"><small>Now</small><b id="nowName">No song loaded</b><span id="nowMeta"></span></div>
+    <div class="now-next" id="nowNext"></div>
+    <button class="nav" id="nowNextBtn" aria-label="Next song">▶</button>
+  </div>
 
   <div class="seg ctl-tabs" id="ctlTabs" role="tablist" aria-label="Controls"><button data-tab="click">Click</button><button data-tab="pad">Pad</button></div>
   <div class="main">
@@ -1067,7 +1084,7 @@ function renderClick(){
   renderBoth();
 }
 const meta=s=>`${KEYS[s.key]} · ${s.bpm} · ${s.meter}`;
-function renderSongs(){renderSet();renderLib();renderLocal()}
+function renderSongs(){renderSet();renderLib();renderLocal();renderNow()}
 function renderSet(){
   const ol=$('#setList');ol.innerHTML='';
   setIds.forEach((id,i)=>{
@@ -1488,7 +1505,19 @@ async function fetchChart(s){
   finally{chartLoading.delete(id);chartSig='';renderChart()}
 }
 function currentSong(){if(cur>=0&&cur<setIds.length&&(!loadedId||setIds[cur]===loadedId))return songAt(cur);return byId(loadedId)||(setIds.length?songAt(0):null)}
+function renderNow(){
+  const s=currentSong(),n=$('#nowName');if(!n)return;
+  n.textContent=s?s.name:'No song loaded';
+  $('#nowMeta').textContent=s?`Key ${KEYS[s.key]} · ${s.bpm} BPM · ${s.meter}`:(setIds.length?'Pick a song from the setlist.':'');
+  let i=s?(cur>=0&&setIds[cur]===s.id?cur:setIds.indexOf(s.id)):-1;
+  const nx=i>=0&&i+1<setIds.length?songAt(i+1):(!s&&setIds.length?songAt(0):null);
+  const ne=$('#nowNext');ne.textContent='';
+  if(nx){ne.append(s?'Next: ':'First: ');const b=document.createElement('b');b.textContent=nx.name;ne.append(b)}
+  else if(s&&i>=0)ne.textContent='Last song';
+  $('#nowPrev').disabled=!(i>0);$('#nowNextBtn').disabled=!nx;
+}
 function renderChart(){
+  renderNow();
   const s=currentSong(),body=$('#chartBody');if(!body)return;
   $('#chTitle').textContent=s?s.name:'No song loaded';
   $('#chMeta').textContent=s?`Key ${KEYS[s.key]} · ${s.bpm} BPM · ${s.meter}`:'';
@@ -1598,6 +1627,8 @@ $('#chartBody').addEventListener('submit',async e=>{
 });
 function stepSong(d){const s=currentSong();let i=cur>=0&&s&&setIds[cur]===s.id?cur:(s?setIds.indexOf(s.id):-1);if(i<0&&cur>=0)i=cur;selectSong(Math.min(setIds.length-1,Math.max(0,i+d)))}
 $('#chPrev').addEventListener('click',()=>stepSong(-1));
+$('#nowPrev').addEventListener('click',()=>stepSong(-1));
+$('#nowNextBtn').addEventListener('click',()=>{const s=currentSong();if(!s&&setIds.length)selectSong(0);else stepSong(1)});
 $('#chNext').addEventListener('click',()=>stepSong(1));
 $('#chBoth').addEventListener('click',toggleBoth);
 $('#chartSet').addEventListener('click',e=>{const b=e.target.closest('button');if(b)selectSong(+b.dataset.i)});
