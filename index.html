@@ -252,6 +252,37 @@ body.view-chart .audio-only{display:none!important}
 .history li{display:grid;grid-template-columns:110px minmax(0,1fr);gap:10px;font-size:13px;padding:6px 0;border-bottom:1px solid var(--line)}
 .history time{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
 .history b{font-weight:600}
+body.locked .signed-only{display:none!important}
+.localview{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.localview select{width:auto;flex:1 1 180px}
+.practice{border:1px solid var(--click);color:var(--fg);background:var(--click-dim);border-radius:5px;padding:8px 10px;font-size:13px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.practice button{font-size:13px;padding:6px 10px}
+.pl-top{display:flex;gap:8px;flex-wrap:wrap}
+.pl-top select{flex:1 1 220px;width:auto}
+.pl-row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.pl-row input[type=text]{flex:1 1 220px;width:auto;font-size:16px}
+.pl-items{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.pl-items li{display:grid;grid-template-columns:24px minmax(0,1fr) 72px auto auto;gap:8px;align-items:center;padding:6px 8px;background:var(--panel-2);border:1px solid var(--line);border-radius:5px}
+.pl-items li.note{display:block;background:none;border:0;padding:0}
+.pl-items .n{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.pl-items .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+.pl-items .m{font-family:var(--f-mono);font-size:12px;color:var(--muted);white-space:nowrap}
+.pl-items select{padding:5px 6px}
+.plmv{display:flex;gap:4px}
+@media (max-width:640px){.pl-items li{grid-template-columns:24px minmax(0,1fr) 72px}.pl-items .m{display:none}.pl-items .plmv{grid-column:2/-1;justify-content:flex-end}}
+.pl-results{list-style:none;margin:0;padding:0;display:grid;gap:6px;max-height:300px;overflow:auto}
+.pl-hit{width:100%;text-align:left;display:grid;gap:2px;padding:8px 10px}
+.pl-hit .tag{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.pl-arrs{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 0 4px 12px}
+.pl-arrs button{font-size:13px;padding:6px 10px}
+.pl-actions{display:flex;flex-wrap:wrap;gap:8px}
+.pl-actions #plSave{border-color:var(--ok);color:var(--ok)}
+.route-toggle{display:flex;align-items:center;gap:12px;width:100%;background:none;border:0;padding:0;text-align:left;color:var(--fg)}
+.route-toggle h2{margin:0}
+.route-sum{font-family:var(--f-mono);font-size:12px;color:var(--muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.route-toggle .chev{font-size:14px;color:var(--muted);transition:transform .15s}
+.route-toggle[aria-expanded="true"] .chev{transform:rotate(90deg)}
+.route-body{display:grid;gap:16px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -267,6 +298,7 @@ body.view-chart .audio-only{display:none!important}
     <div class="row">
       <span class="sync" id="sync">Loading library…</span>
       <button class="lock" id="lockBtn">Sign in</button>
+      <button class="lock signed-only" id="plBtn">Playlists</button>
       <button class="lock admin-only" id="teamBtn">Team</button>
       <div class="seg views" role="group" aria-label="Layout"><button data-view="mixer">Mixer</button><button data-view="split">Split</button><button data-view="chart">Chart</button></div>
     </div>
@@ -373,10 +405,12 @@ body.view-chart .audio-only{display:none!important}
         <button id="clearSet" class="edit-only">Clear set</button>
         <button id="pcoSync">Sync now</button>
       </div>
-      <div class="pco" id="pcoBox"><span id="pcoPlan">Planning Center: checking…</span><span class="note" id="pcoWhen"></span><select id="planPick" class="edit-only" aria-label="Choose which Sunday Service plan to use"><option value="">Next Sunday (automatic)</option></select></div>
+      <div class="pco" id="pcoBox"><span id="pcoPlan">Planning Center: checking…</span><span class="note" id="pcoWhen"></span><select id="planPick" class="edit-only" aria-label="Band setlist source"><option value="">Next Sunday (automatic)</option></select></div>
+      <div class="localview signed-only"><label class="label" for="viewList">On this device</label><select id="viewList" aria-label="Setlist shown on this device"><option value="">Band setlist</option></select></div>
+      <div class="practice" id="practiceNote" hidden><span>Showing <b id="practiceName"></b> on this device only.</span><button id="practiceExit">Back to band setlist</button></div>
       <ol class="songs" id="setList"></ol>
       <p class="note" id="setEmpty" hidden>No songs in the Planning Center plan yet.</p>
-      <p class="note">The setlist comes from the Sunday Service plan in Planning Center. Change songs, keys and order there. Selecting a song loads its key, tempo and time signature.</p>
+      <p class="note" id="setNote">The setlist comes from the Sunday Service plan in Planning Center. Change songs, keys and order there. Selecting a song loads its key, tempo and time signature.</p>
 
       <div class="setlist-head lib-head">
         <h2>Song library</h2>
@@ -390,12 +424,11 @@ body.view-chart .audio-only{display:none!important}
 
   <!-- ROUTING -->
   <section class="routing" aria-label="Output routing">
-    <div class="row" style="justify-content:space-between">
-      <h2>Output routing</h2>
-      <div class="row">
-        <button id="testClick">Test click out</button>
-        <button id="testPad">Test pad out</button>
-      </div>
+    <button class="route-toggle" id="routeToggle" aria-expanded="false" aria-controls="routeBody"><h2>Output routing</h2><span class="route-sum" id="routeSum"></span><span class="chev" aria-hidden="true">▶</span></button>
+    <div class="route-body" id="routeBody" hidden>
+    <div class="row">
+      <button id="testClick">Test click out</button>
+      <button id="testPad">Test pad out</button>
     </div>
     <div class="seg" id="routeSel" style="max-width:720px">
       <button data-r="split">Split stereo (L click · R pad)</button>
@@ -413,6 +446,7 @@ body.view-chart .audio-only{display:none!important}
       <span><kbd>T</kbd> tap tempo</span>
       <span><kbd>↑</kbd><kbd>↓</kbd> tempo ±1</span>
       <span><kbd>←</kbd><kbd>→</kbd> previous / next song</span>
+    </div>
     </div>
   </section>
 </div>
@@ -434,6 +468,26 @@ body.view-chart .audio-only{display:none!important}
   <div class="chart-body" id="chartBody"></div>
 </section>
 </div>
+
+<section class="team" id="plPane" hidden aria-label="Playlists">
+  <div class="team-card">
+    <div class="setlist-head"><h2>Playlists</h2><button id="plClose">Close</button></div>
+    <p class="note">Build setlists outside Planning Center from any song in the church's Planning Center library, so chord charts still work. <b>Shared</b> playlists are for the band: editors build them and can make one the setlist on every device. <b>Personal</b> playlists are yours for practice and only change what your own device shows.</p>
+    <div class="pl-top"><select id="plPick" aria-label="Playlist"></select><button id="plNew">New playlist</button></div>
+    <div id="plEditor" hidden style="display:grid;gap:12px">
+      <div class="pl-row"><input type="text" id="plName" maxlength="80" placeholder="Playlist name" aria-label="Playlist name"><label class="check"><input type="checkbox" id="plShared"> Shared with the band</label></div>
+      <p class="note" id="plNote"></p>
+      <ol class="pl-items" id="plItems"></ol>
+      <div id="plAdd" style="display:grid;gap:8px">
+        <h3>Add songs</h3>
+        <input type="search" id="plSearch" placeholder="Search song titles in Planning Center" aria-label="Search songs" autocomplete="off">
+        <ul class="pl-results" id="plResults"></ul>
+      </div>
+      <div class="pl-actions"><button id="plSave">Save</button><button id="plShow">Show on this device</button><button id="plUse">Make it the band setlist</button><button id="plDel" class="danger">Delete</button></div>
+    </div>
+    <div class="err" id="plMsg" role="status"></div>
+  </div>
+</section>
 
 <section class="team" id="teamPane" hidden aria-label="Team">
   <div class="team-card">
@@ -461,7 +515,7 @@ const KEYS=['C','D♭','D','E♭','E','F','F♯','G','A♭','A','B♭','B'];
 const METERS={'4/4':{beats:4},'3/4':{beats:3},'2/4':{beats:2},'6/8':{beats:6,compound:true},'12/8':{beats:12,compound:true}};
 const SB_URL='https://lamithxecgiblsgvoszy.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhbWl0aHhlY2dpYmxzZ3Zvc3p5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIzNzcyNjQsImV4cCI6MjEwNzk1MzI2NH0.zSbJdlIuL3PHW0oeSLgc2Wk-uGAhNRYet8Y_wpPNsM4';
-const DEF={key:7,padVol:70,tone:45,shimmer:30,fade:4,voicing:'open',bpm:72,meter:'4/4',sub:1,sound:'beep',accent:true,clickVol:80,route:'split',padCh:0,clickCh:2,view:'mixer',split:0.45,chartSize:20,chartCols:1};
+const DEF={key:7,padVol:70,tone:45,shimmer:30,fade:4,voicing:'open',bpm:72,meter:'4/4',sub:1,sound:'beep',accent:true,clickVol:80,route:'split',padCh:0,clickCh:2,view:'mixer',split:0.45,chartSize:20,chartCols:1,localList:null,routingOpen:false};
 
 function load(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}
 function save(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
@@ -469,12 +523,24 @@ const S=Object.assign({},DEF,load('wpc.settings')||{});
 function persist(){save('wpc.settings',S)}
 
 /* shared song library: last synced copy is kept on this device for offline use */
-let library=[], setIds=[], syncedAt=null;
+let library=[], setIds=[], setMeta=[], bandSet=[], playlists=[], syncedAt=null;
 const cached=load('pc.cache');
-if(cached&&Array.isArray(cached.library)){library=cached.library;setIds=Array.isArray(cached.setIds)?cached.setIds:[];syncedAt=cached.at||null}
+if(cached&&Array.isArray(cached.library)){library=cached.library;bandSet=Array.isArray(cached.bandSet)?cached.bandSet:(Array.isArray(cached.setIds)?cached.setIds.map(id=>({song_id:id})):[]);syncedAt=cached.at||null}
+try{playlists=JSON.parse(localStorage.getItem('pc.playlists')||'[]')||[]}catch(e){}
 const byId=id=>library.find(s=>s.id===id);
 let cur=-1, editing=null, clearArmed=null, loadedId=null;
-function cacheLib(){save('pc.cache',{library,setIds,at:syncedAt,pco:pcoStatus})}
+function cacheLib(){save('pc.cache',{library,bandSet,at:syncedAt,pco:pcoStatus})}
+function activeList(){return S.localList&&pin?playlists.find(p=>p.id===S.localList)||null:null}
+function rebuildSet(){
+  const pl=activeList();
+  const items=pl?pl.items.map(i=>({song_id:i.song_id,song_key:i.key,pco_arrangement_id:i.arrangement_id})):bandSet;
+  const curId=setIds[cur];
+  const ok=items.filter(i=>byId(i.song_id));
+  setIds=ok.map(i=>i.song_id);
+  setMeta=ok.map(i=>({key:i.song_key==null?null:+i.song_key,arr:i.pco_arrangement_id||null}));
+  cur=curId?setIds.indexOf(curId):-1;
+}
+function songAt(i){const s=byId(setIds[i]);if(!s)return null;const m=setMeta[i]||{};return Object.assign({},s,{key:m.key==null?s.key:m.key,arr:m.arr||null})}
 const newId=()=>(window.crypto&&crypto.randomUUID)?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==='x'?r:(r&3|8)).toString(16)});
 
 let pin=null, me=null;
@@ -493,17 +559,16 @@ async function pull(){
   pulling=true;
   try{
     const [songs,items,sync]=await Promise.all([
-      sb('/rest/v1/songs?select=id,name,song_key,bpm,meter&order=name'),
-      sb('/rest/v1/setlist_items?select=song_id&order=position'),
+      sb('/rest/v1/songs?select=id,name,song_key,bpm,meter,pco_song_id&order=name'),
+      sb('/rest/v1/setlist_items?select=song_id,song_key,pco_arrangement_id&order=position'),
       sb('/rest/v1/sync_status?select=*').catch(()=>[])
     ]);
     pcoStatus=(sync&&sync[0])||pcoStatus;renderPco();
     if(pending||editing)return;
-    const curId=setIds[cur];
-    library=songs.map(r=>({id:r.id,name:r.name,key:r.song_key,bpm:r.bpm,meter:r.meter}));
-    setIds=items.map(r=>r.song_id).filter(byId);
-    cur=curId?setIds.indexOf(curId):-1;
+    library=songs.map(r=>({id:r.id,name:r.name,key:r.song_key,bpm:r.bpm,meter:r.meter,pco:r.pco_song_id||null}));
+    bandSet=items;rebuildSet();
     syncedAt=Date.now();cacheLib();renderSongs();renderChart();
+    if(pin)loadPlaylists();
     setSync('ok','Synced '+fmtTime(syncedAt));
   }catch(e){
     setSync('off',syncedAt?'Offline · using copy from '+fmtTime(syncedAt):'Offline · no saved library yet');
@@ -539,8 +604,9 @@ function applyLock(){
   document.body.classList.toggle('is-admin',role==='admin');
   $('#lockBtn').textContent=pin?'Sign out'+(me&&me.name?' ('+me.name+')':''):'Sign in';
   if(!canEdit)editing=null;
-  renderSongs();
+  rebuildSet();renderSongs();fillSource();
   if(canEdit)loadPlans();
+  if(pin)loadPlaylists();
   chartSig='';renderChart();
 }
 /* Planning Center sync */
@@ -550,16 +616,34 @@ function renderPco(){
   const p=$('#pcoPlan'),w=$('#pcoWhen');if(!p)return;
   const s=pcoStatus;p.className='';
   if(!s||!s.synced_at){p.textContent=s&&s.message?'Planning Center: '+s.message:'Planning Center: not synced yet';if(s&&s.message)p.className='err';w.textContent='';return}
+  const note=$('#setNote');
+  if(s.active_playlist_id){
+    p.textContent='';const pb=document.createElement('b');pb.textContent='Playlist · '+(s.active_playlist_name||'');p.appendChild(pb);
+    w.textContent='Planning Center sync is paused while this playlist is the band setlist.';
+    note.textContent='The band setlist is a playlist chosen in the app. Editors can switch back to Planning Center with the menu above. Selecting a song loads its key, tempo and time signature.';
+    fillSource();return;
+  }
+  note.textContent='The setlist comes from the Sunday Service plan in Planning Center. Change songs, keys and order there. Selecting a song loads its key, tempo and time signature.';
   const d=s.plan_date?new Date(s.plan_date).toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}):'';
   p.textContent='';const b=document.createElement('b');b.textContent=(s.service_type||'Planning Center')+(d?' · '+d:'');p.appendChild(b);
   if(s.plan_title&&!/\d{4}/.test(s.plan_title))p.appendChild(document.createTextNode(' · '+s.plan_title));
   w.textContent=(s.pinned_plan_id?'Pinned to this plan. ':'')+'Updated from Planning Center at '+fmtTime(s.synced_at)+(s.message?'. Last check failed: '+s.message:'');
-  const sel=$('#planPick');
-  if(sel&&document.activeElement!==sel){
-    const v=s.pinned_plan_id||'';
-    if(v&&![...sel.options].some(o=>o.value===v)){const o=document.createElement('option');o.value=v;o.textContent=b.textContent;sel.appendChild(o)}
-    sel.value=v;
-  }
+  fillSource();
+}
+let planList=[];
+function fillSource(){
+  const sel=$('#planPick');if(!sel||document.activeElement===sel)return;
+  const s=pcoStatus||{};
+  sel.innerHTML='';
+  const g1=document.createElement('optgroup');g1.label='Planning Center';
+  g1.append(new Option('Next Sunday (automatic)',''));
+  planList.forEach(p=>{const d=new Date(p.date).toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'});g1.append(new Option(d+(p.title?' · '+p.title:'')+(p.upcoming?' (upcoming)':''),p.id))});
+  sel.append(g1);
+  const shared=playlists.filter(p=>p.shared);
+  if(shared.length){const g2=document.createElement('optgroup');g2.label='Playlists';shared.forEach(p=>g2.append(new Option(p.name+' · '+p.items.length+' songs','pl:'+p.id)));sel.append(g2)}
+  const v=s.active_playlist_id?'pl:'+s.active_playlist_id:(s.pinned_plan_id||'');
+  if(v&&![...sel.options].some(o=>o.value===v))sel.append(new Option(v.startsWith('pl:')?'Playlist · '+(s.active_playlist_name||''):'Pinned plan',v));
+  sel.value=v;
 }
 async function syncPco(manual){
   if(pcoBusy)return;pcoBusy=true;
@@ -581,16 +665,7 @@ async function loadPlans(){
   try{
     const r=await fetch(FN_URL,{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json'},body:JSON.stringify({action:'list'})});
     const j=await r.json();if(!j.ok)return;
-    plansLoadedAt=Date.now();
-    const sel=$('#planPick'),v=(pcoStatus&&pcoStatus.pinned_plan_id)||'';
-    sel.innerHTML='<option value="">Next Sunday (automatic)</option>';
-    j.plans.forEach(p=>{
-      const o=document.createElement('option');o.value=p.id;
-      const d=new Date(p.date).toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'});
-      o.textContent=d+(p.title?' · '+p.title:'')+(p.upcoming?' (upcoming)':'');
-      sel.appendChild(o);
-    });
-    sel.value=v;
+    plansLoadedAt=Date.now();planList=j.plans||[];fillSource();
   }catch(e){}
 }
 async function choosePlan(id){
@@ -599,12 +674,12 @@ async function choosePlan(id){
   try{
     const r=await fetch(FN_URL,{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json'},body:JSON.stringify({action:'choose',pin,plan_id:id||null})});
     const j=await r.json().catch(()=>({}));
-    if(j.ok)say(id?'Pinned that plan: '+j.status.song_count+' songs loaded.':'Back to automatic: following the next Sunday Service.');
+    if(j.ok)say(id?'Pinned that plan: '+j.status.song_count+' songs loaded. Planning Center is the band setlist.':'Back to automatic: following the next Sunday Service in Planning Center.');
     else{say("Couldn't switch plans: "+(j.error||'unknown error'));if(r.status===403)lock()}
   }catch(e){say("Couldn't reach Planning Center sync. Check the internet connection.")}
   await pull();
 }
-function lock(){pin=null;me=null;try{['pc.pin','pc.me'].forEach(k=>{localStorage.removeItem(k);sessionStorage.removeItem(k)});Object.keys(localStorage).filter(k=>k.startsWith('pc.chart.')).forEach(k=>localStorage.removeItem(k))}catch(e){}$('#teamPane').hidden=true;applyLock()}
+function lock(){pin=null;me=null;playlists=[];plDraft=null;$('#plPane').hidden=true;try{['pc.pin','pc.me','pc.playlists'].forEach(k=>{localStorage.removeItem(k);sessionStorage.removeItem(k)});Object.keys(localStorage).filter(k=>k.startsWith('pc.chart.')).forEach(k=>localStorage.removeItem(k))}catch(e){}$('#teamPane').hidden=true;applyLock()}
 
 let statusTimer;
 function say(msg){const el=$('#status');el.textContent=msg;clearTimeout(statusTimer)}
@@ -890,11 +965,11 @@ function renderClick(){
   renderBoth();
 }
 const meta=s=>`${KEYS[s.key]} · ${s.bpm} · ${s.meter}`;
-function renderSongs(){renderSet();renderLib()}
+function renderSongs(){renderSet();renderLib();renderLocal()}
 function renderSet(){
   const ol=$('#setList');ol.innerHTML='';
   setIds.forEach((id,i)=>{
-    const s=byId(id);if(!s)return;
+    const s=songAt(i);if(!s)return;
     const li=document.createElement('li');if(i===cur)li.className='cur';
     li.innerHTML=`<button class="song" data-i="${i}"><span class="n">${String(i+1).padStart(2,'0')}</span><span class="t"></span><span class="m">${meta(s)}</span></button>
       <div class="mv"><button class="ic" data-up="${i}" aria-label="Move up" ${i===0?'disabled':''}>↑</button><button class="ic" data-down="${i}" aria-label="Move down" ${i===setIds.length-1?'disabled':''}>↓</button><button class="ic rm" data-rm="${i}" aria-label="Remove from setlist">×</button></div>`;
@@ -902,7 +977,7 @@ function renderSet(){
     ol.appendChild(li);
   });
   $('#setEmpty').hidden=setIds.length>0;
-  const cs=$('#chartSet');if(cs){const curId=(currentSong()||{}).id;cs.innerHTML='';setIds.forEach((id,i)=>{const s=byId(id);if(!s)return;const b=document.createElement('button');b.dataset.i=i;if(id===curId)b.className='cur';b.innerHTML='<i>'+(i+1)+'</i><span></span><i>'+KEYS[s.key]+'</i>';b.querySelector('span').textContent=s.name;cs.appendChild(b)});const c=cs.querySelector('.cur');if(c)c.scrollIntoView({block:'nearest',inline:'nearest'})}
+  const cs=$('#chartSet');if(cs){const curId=(currentSong()||{}).id;const ci=cur>=0&&setIds[cur]===curId?cur:setIds.indexOf(curId);cs.innerHTML='';setIds.forEach((id,i)=>{const s=songAt(i);if(!s)return;const b=document.createElement('button');b.dataset.i=i;if(i===ci)b.className='cur';b.innerHTML='<i>'+(i+1)+'</i><span></span><i>'+KEYS[s.key]+'</i>';b.querySelector('span').textContent=s.name;cs.appendChild(b)});const c=cs.querySelector('.cur');if(c)c.scrollIntoView({block:'nearest',inline:'nearest'})}
   const c=$('#clearSet');c.disabled=!setIds.length;c.textContent=clearArmed?'Tap again to clear':'Clear set';c.classList.toggle('danger',!!clearArmed);
 }
 function renderLib(){
@@ -942,7 +1017,7 @@ function loadSong(s,i){
 }
 function selectSong(i){
   if(i<0||i>=setIds.length)return;
-  const s=byId(setIds[i]);if(s)loadSong(s,i);
+  const s=songAt(i);if(s)loadSong(s,i);
 }
 
 /* routing panel */
@@ -953,6 +1028,7 @@ function renderRouting(){
   const chip=$('#routeChip');
   let mode=S.route;if(mode==='multi'&&ctx&&n<=2)mode='split';
   chip.classList.toggle('warn',mode==='rehearsal');
+  const sumEl=$('#routeSum');queueMicrotask(()=>{if(sumEl)sumEl.textContent=chip.textContent});
   chip.textContent=mode==='split'?'Click → Left out · Pad → Right out':mode==='multi'?`Click → Out ${S.clickCh+1} · Pad → Out ${S.padCh+1}–${S.padCh+2}`:'Rehearsal: click and pad mixed together';
   $('#clickDest').textContent=mode==='rehearsal'?'Mixed with pad':'IEM only';
   $('#padDest').textContent=mode==='rehearsal'?'Mixed with click':'House + IEM';
@@ -1294,11 +1370,12 @@ function sheetHtml(text,semis,flats){
   return html+(open?'</div>':'');
 }
 const chartLoading=new Set();let chartSig='';
+const ck=s=>s.id+(s.arr?'.'+s.arr:'');
 function readChart(id){try{return JSON.parse(localStorage.getItem('pc.chart.'+id)||'null')}catch(e){return null}}
-async function fetchChart(id){
-  if(chartLoading.has(id)||!pin)return;chartLoading.add(id);
+async function fetchChart(s){
+  const id=ck(s);if(chartLoading.has(id)||!pin)return;chartLoading.add(id);
   try{
-    const r=await fetch(FN_URL,{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json'},body:JSON.stringify({action:'chart',pin,song_id:id})});
+    const r=await fetch(FN_URL,{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json'},body:JSON.stringify({action:'chart',pin,song_id:s.id,arrangement_id:s.arr||null})});
     const j=await r.json().catch(()=>({}));
     if(j.ok){try{localStorage.setItem('pc.chart.'+id,JSON.stringify({linked:j.linked,chart:j.chart||'',chart_key:j.chart_key||null,arrangement:j.arrangement||null,at:Date.now()}))}catch(e){}}
     else if(r.status===403&&j.status==='bad_pin'){lock();say('Your PIN no longer works. Sign in again.')}
@@ -1306,7 +1383,7 @@ async function fetchChart(id){
   }catch(e){}
   finally{chartLoading.delete(id);chartSig='';renderChart()}
 }
-function currentSong(){return byId(loadedId)||byId(setIds[cur])||byId(setIds[0])||null}
+function currentSong(){if(cur>=0&&cur<setIds.length&&(!loadedId||setIds[cur]===loadedId))return songAt(cur);return byId(loadedId)||(setIds.length?songAt(0):null)}
 function renderChart(){
   const s=currentSong(),body=$('#chartBody');if(!body)return;
   $('#chTitle').textContent=s?s.name:'No song loaded';
@@ -1314,16 +1391,16 @@ function renderChart(){
   $('#chCols').textContent=S.chartCols===2?'2 col':'1 col';
   body.style.setProperty('--chart-size',S.chartSize+'px');
   if(document.body.classList.contains('view-mixer'))return;
-  const c=s&&pin?readChart(s.id):null;
-  const sig=[!!pin,s&&s.id,s&&s.key,c&&c.at,S.chartCols].join('|');
+  const c=s&&pin?readChart(ck(s)):null;
+  const sig=[!!pin,s&&s.id,s&&s.arr,s&&s.key,c&&c.at,S.chartCols].join('|');
   if(sig===chartSig)return;chartSig=sig;
   if(!pin){
     body.innerHTML='<form class="chart-signin" id="chSignin"><p>Sign in with your PIN to see chord charts.</p><input type="password" id="chPin" inputmode="numeric" autocomplete="off" aria-label="Your PIN" maxlength="40"><button type="submit">Sign in</button><span class="err" id="chErr"></span></form>';
     return;
   }
   if(!s){body.innerHTML='<div class="chart-empty"><p>Pick a song from the setlist to see its chart.</p></div>';return}
-  if(!c){body.innerHTML='<div class="chart-empty"><p>Loading the chart from Planning Center…</p></div>';fetchChart(s.id);return}
-  if(Date.now()-c.at>600000&&navigator.onLine)fetchChart(s.id);
+  if(!c){body.innerHTML='<div class="chart-empty"><p>Loading the chart from Planning Center…</p></div>';fetchChart(s);return}
+  if(Date.now()-c.at>600000&&navigator.onLine)fetchChart(s);
   if(c.error){body.innerHTML='<div class="chart-empty"><p>'+escH(c.error)+'</p></div>';return}
   if(!c.linked){body.innerHTML='<div class="chart-empty"><p>This song isn’t linked to Planning Center, so there’s no chart to show. Songs come in linked when they’re part of a synced plan.</p></div>';return}
   if(!c.chart.trim()){body.innerHTML='<div class="chart-empty"><p>No chord chart is typed in Planning Center for this arrangement'+(c.arrangement?' ('+escH(c.arrangement)+')':'')+'. If its chart is a PDF, open it in Planning Center.</p></div>';return}
@@ -1336,7 +1413,7 @@ $('#chartBody').addEventListener('submit',async e=>{
   if(e.target.id!=='chSignin')return;e.preventDefault();
   await signIn($('#chPin').value.trim(),true,$('#chErr'));
 });
-function stepSong(d){const s=currentSong();let i=s?setIds.indexOf(s.id):-1;if(i<0&&cur>=0)i=cur;selectSong(Math.min(setIds.length-1,Math.max(0,i+d)))}
+function stepSong(d){const s=currentSong();let i=cur>=0&&s&&setIds[cur]===s.id?cur:(s?setIds.indexOf(s.id):-1);if(i<0&&cur>=0)i=cur;selectSong(Math.min(setIds.length-1,Math.max(0,i+d)))}
 $('#chPrev').addEventListener('click',()=>stepSong(-1));
 $('#chNext').addEventListener('click',()=>stepSong(1));
 $('#chBoth').addEventListener('click',toggleBoth);
@@ -1344,6 +1421,193 @@ $('#chartSet').addEventListener('click',e=>{const b=e.target.closest('button');i
 $('#chSmaller').addEventListener('click',()=>{S.chartSize=Math.max(12,S.chartSize-2);persist();renderChart()});
 $('#chBigger').addEventListener('click',()=>{S.chartSize=Math.min(44,S.chartSize+2);persist();renderChart()});
 $('#chCols').addEventListener('click',()=>{S.chartCols=S.chartCols===2?1:2;persist();renderChart()});
+
+/* playlists outside Planning Center */
+const PL_MSG={need_name:'Give the playlist a name.',not_allowed:'Only editors can share playlists or change shared ones.',not_found:'That playlist was deleted.',in_use:'This playlist is the band setlist right now. Switch the setlist back to Planning Center first.',not_shared:'Only shared playlists can be the band setlist.',bad_pin:'Your PIN no longer works. Sign in again.',locked:'Too many wrong PIN tries. Wait 10 minutes.'};
+let plDraft=null, plDelArmed=null, plSearchTimer=null, plSearchSeq=0;
+const canEditNow=()=>!!(pin&&me&&(me.role==='editor'||me.role==='admin'));
+async function loadPlaylists(){
+  if(!pin)return;
+  try{
+    const r=await rpc('list_playlists',{p_pin:pin});
+    if(r&&r.status==='ok'){
+      playlists=r.playlists||[];
+      try{localStorage.setItem('pc.playlists',JSON.stringify(playlists))}catch(e){}
+      if(S.localList&&!playlists.some(p=>p.id===S.localList)){S.localList=null;persist()}
+      rebuildSet();renderSongs();fillSource();renderPlPick();chartSig='';renderChart();
+    }else if(r&&r.status==='bad_pin'){lock();say('Your saved PIN no longer works. Sign in again.')}
+  }catch(e){}
+}
+function renderLocal(){
+  const sel=$('#viewList');if(!sel)return;
+  const pl=activeList();
+  if(document.activeElement!==sel){
+    sel.innerHTML='';sel.append(new Option('Band setlist',''));
+    playlists.forEach(p=>sel.append(new Option(p.name+(p.shared?' (shared)':' (mine)'),p.id)));
+    sel.value=pl?pl.id:'';
+  }
+  $('#practiceNote').hidden=!pl;
+  if(pl)$('#practiceName').textContent=pl.name;
+}
+function showLocal(id){
+  S.localList=id||null;persist();cur=-1;rebuildSet();renderSongs();chartSig='';renderChart();
+  const pl=activeList();
+  say(pl?`Showing “${pl.name}” on this device only. The band setlist hasn’t changed.`:'Back to the band setlist.');
+}
+async function activatePlaylist(id){
+  if(!pin){say('Sign in first.');return}
+  setSync('busy','Switching setlist…');
+  try{
+    const r=await rpc('activate_playlist',{p_pin:pin,p_id:id});
+    const nm=(playlists.find(p=>p.id===id)||{}).name||'';
+    if(r==='ok')say(`The band setlist is now “${nm}” on every device. Planning Center sync is paused until you switch back.`);
+    else if(r==='bad_pin'){lock();say(PL_MSG.bad_pin)}
+    else say(PL_MSG[r]||"Couldn't switch the setlist.");
+  }catch(e){say("Couldn't switch the setlist. Check the internet connection.")}
+  await pull();
+}
+function plMsg(t,ok){const e=$('#plMsg');e.textContent=t;e.classList.toggle('okmsg',!!ok)}
+function renderPlPick(){
+  const sel=$('#plPick');if(!sel||document.activeElement===sel)return;
+  sel.innerHTML='';sel.append(new Option(playlists.length?'Choose a playlist…':'No playlists yet',''));
+  playlists.forEach(p=>sel.append(new Option(p.name+(p.shared?' · shared':' · personal')+' · '+p.items.length+' songs',p.id)));
+  sel.value=plDraft&&plDraft.id?plDraft.id:'';
+}
+function openPl(id){
+  const p=playlists.find(x=>x.id===id);
+  plDraft=p?{id:p.id,name:p.name,shared:p.shared,items:p.items.map(i=>({song_id:i.song_id,key:i.key,arr:i.arrangement_id||null})),dirty:false}
+           :{id:null,name:'',shared:canEditNow(),items:[],dirty:true};
+  plMsg('');renderPlEditor();renderPlPick();
+  if(!p)$('#plName').focus();
+}
+function renderPlEditor(){
+  const ed=$('#plEditor');ed.hidden=!plDraft;if(!plDraft)return;
+  const d=plDraft,canEdit=canEditNow(),locked=d.shared&&!canEdit&&!!d.id;
+  if(document.activeElement!==$('#plName'))$('#plName').value=d.name;
+  $('#plName').disabled=locked;
+  $('#plShared').checked=d.shared;$('#plShared').disabled=!canEdit;
+  const ol=$('#plItems');ol.innerHTML='';
+  if(!d.items.length)ol.innerHTML='<li class="note">No songs yet. Search below to add some.</li>';
+  d.items.forEach((it,i)=>{
+    const s=byId(it.song_id);if(!s)return;
+    const li=document.createElement('li');
+    li.innerHTML=`<span class="n">${i+1}</span><span class="t"></span>
+      <select class="pk" data-i="${i}" aria-label="Key" ${locked?'disabled':''}>${KEYS.map((k,j)=>`<option value="${j}">${k}</option>`).join('')}</select>
+      <span class="m">${s.bpm} · ${s.meter}</span>
+      <span class="plmv"><button class="ic" data-up="${i}" aria-label="Move up" ${i===0||locked?'disabled':''}>↑</button><button class="ic" data-down="${i}" aria-label="Move down" ${i===d.items.length-1||locked?'disabled':''}>↓</button><button class="ic rm" data-rm="${i}" aria-label="Remove" ${locked?'disabled':''}>×</button></span>`;
+    li.querySelector('.t').textContent=s.name;
+    li.querySelector('.pk').value=it.key==null?s.key:it.key;
+    ol.appendChild(li);
+  });
+  $('#plAdd').hidden=locked;
+  $('#plSave').disabled=locked;$('#plSave').textContent=d.dirty?'Save':'Saved';
+  $('#plDel').hidden=!d.id||locked;$('#plDel').textContent=plDelArmed?'Tap again to delete':'Delete';
+  $('#plShow').disabled=!d.id;
+  $('#plUse').hidden=!(canEdit&&d.shared&&d.id);
+  const active=pcoStatus&&pcoStatus.active_playlist_id===d.id;
+  $('#plUse').disabled=!!active;$('#plUse').textContent=active?'This is the band setlist':'Make it the band setlist';
+  $('#plNote').textContent=locked?'This shared playlist can only be changed by editors. You can still show it on this device.':'';
+}
+function plDirty(){plDraft.dirty=true;renderPlEditor()}
+async function plSearch(){
+  const q=$('#plSearch').value.trim(),ul=$('#plResults'),seq=++plSearchSeq;
+  ul.innerHTML='';if(q.length<2)return;
+  const ql=q.toLowerCase();
+  const local=library.filter(s=>s.name.toLowerCase().includes(ql)).slice(0,6);
+  const row=(label,tag,data)=>{const li=document.createElement('li');const b=document.createElement('button');b.className='pl-hit';Object.assign(b.dataset,data);b.innerHTML='<span class="t"></span><span class="tag"></span>';b.querySelector('.t').textContent=label;b.querySelector('.tag').textContent=tag;li.appendChild(b);ul.appendChild(li);return li};
+  local.forEach(s=>row(s.name,`In app · ${KEYS[s.key]} · ${s.bpm} BPM`,{lib:s.id}));
+  const wait=document.createElement('li');wait.className='note';wait.textContent='Searching Planning Center…';ul.appendChild(wait);
+  try{
+    const r=await fetch(FN_URL,{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json'},body:JSON.stringify({action:'search_songs',pin,q})});
+    const j=await r.json().catch(()=>({}));if(seq!==plSearchSeq)return;wait.remove();
+    if(!j.ok){const e=document.createElement('li');e.className='note';e.textContent="Couldn't search Planning Center: "+(j.error||'unknown error');ul.appendChild(e);return}
+    const have=new Set(library.map(s=>s.pco).filter(Boolean));
+    const hits=j.songs.filter(x=>!have.has(String(x.id))||!local.some(s=>s.pco===String(x.id)));
+    hits.forEach(x=>row(x.title,'Planning Center'+(x.author?' · '+x.author:''),{pco:x.id}));
+    if(!hits.length&&!local.length){const e=document.createElement('li');e.className='note';e.textContent='No songs match that search.';ul.appendChild(e)}
+  }catch(e){if(seq===plSearchSeq){wait.textContent="Couldn't reach Planning Center. Check the internet connection."}}
+}
+function plAddItem(song,key,arr){
+  if(!library.some(s=>s.id===song.id))library.push(song);
+  plDraft.items.push({song_id:song.id,key:key==null?song.key:key,arr:arr||null});plDirty();
+  plMsg(`Added ${song.name}.`,true);
+}
+async function plAddPco(sid,aid,btn){
+  btn.disabled=true;plMsg('Adding from Planning Center…');
+  try{
+    const r=await fetch(FN_URL,{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json'},body:JSON.stringify({action:'add_pco_song',pin,pco_song_id:sid,arrangement_id:aid||null})});
+    const j=await r.json().catch(()=>({}));
+    if(!j.ok){plMsg("Couldn't add that song: "+(j.error||'unknown error'));btn.disabled=false;return}
+    plAddItem(Object.assign({},j.song,{pco:String(sid)}),j.chart_key,j.arrangement_id);
+  }catch(e){plMsg("Couldn't reach Planning Center. Check the internet connection.");btn.disabled=false}
+}
+async function plPickArrangement(sid,li,btn){
+  btn.disabled=true;
+  try{
+    const r=await fetch(FN_URL,{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json'},body:JSON.stringify({action:'song_arrangements',pin,pco_song_id:sid})});
+    const j=await r.json().catch(()=>({}));btn.disabled=false;
+    if(!j.ok){plMsg("Couldn't load arrangements: "+(j.error||'unknown error'));return}
+    if(j.arrangements.length<=1){plAddPco(sid,(j.arrangements[0]||{}).id,btn);return}
+    const box=document.createElement('div');box.className='pl-arrs';
+    const lab=document.createElement('span');lab.className='note';lab.textContent='Pick an arrangement:';box.appendChild(lab);
+    j.arrangements.forEach(a=>{const b=document.createElement('button');b.dataset.arr=a.id;b.dataset.sid=sid;
+      b.textContent=[a.name,a.chart_key,a.bpm?Math.round(a.bpm)+' BPM':null,a.has_chart?'chart':'no chart'].filter(Boolean).join(' · ');box.appendChild(b)});
+    li.querySelector('.pl-arrs')?.remove();li.appendChild(box);
+  }catch(e){btn.disabled=false;plMsg("Couldn't reach Planning Center. Check the internet connection.")}
+}
+async function plSave(){
+  const d=plDraft;d.name=$('#plName').value.trim();
+  if(!d.name){plMsg(PL_MSG.need_name);$('#plName').focus();return false}
+  plMsg('Saving…');
+  try{
+    const r=await rpc('save_playlist',{p_pin:pin,p_id:d.id,p_name:d.name,p_shared:d.shared,p_items:d.items.map(i=>({song_id:i.song_id,key:i.key,arrangement_id:i.arr}))});
+    if(r&&r.status==='ok'){d.id=r.id;d.dirty=false;await loadPlaylists();renderPlEditor();plMsg('Saved.',true);await pull();return true}
+    if(r&&r.status==='bad_pin'){lock();return false}
+    plMsg(PL_MSG[r&&r.status]||"That wasn't saved.");
+  }catch(e){plMsg("Couldn't save. Check the internet connection.")}
+  return false;
+}
+$('#plBtn').addEventListener('click',()=>{$('#plPane').hidden=false;plMsg('');renderPlPick();renderPlEditor();loadPlaylists()});
+$('#plClose').addEventListener('click',()=>{$('#plPane').hidden=true});
+$('#plPane').addEventListener('click',e=>{if(e.target.id==='plPane')$('#plPane').hidden=true});
+$('#plPick').addEventListener('change',e=>{if(e.target.value)openPl(e.target.value)});
+$('#plNew').addEventListener('click',()=>openPl(null));
+$('#plName').addEventListener('input',()=>{plDraft.name=$('#plName').value;plDraft.dirty=true;$('#plSave').textContent='Save'});
+$('#plShared').addEventListener('change',e=>{plDraft.shared=e.target.checked;plDirty()});
+$('#plItems').addEventListener('change',e=>{if(!e.target.classList.contains('pk'))return;plDraft.items[+e.target.dataset.i].key=+e.target.value;plDirty()});
+$('#plItems').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;const it=plDraft.items;
+  if(b.dataset.up!==undefined||b.dataset.down!==undefined){const i=+(b.dataset.up??b.dataset.down),j=b.dataset.up!==undefined?i-1:i+1;if(j<0||j>=it.length)return;[it[i],it[j]]=[it[j],it[i]];plDirty();return}
+  if(b.dataset.rm!==undefined){it.splice(+b.dataset.rm,1);plDirty()}
+});
+$('#plSearch').addEventListener('input',()=>{clearTimeout(plSearchTimer);plSearchTimer=setTimeout(plSearch,350)});
+$('#plResults').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.lib){const s=byId(b.dataset.lib);if(s)plAddItem(s,s.key,null);return}
+  if(b.dataset.arr){plAddPco(b.dataset.sid,b.dataset.arr,b);b.closest('.pl-arrs').remove();return}
+  if(b.dataset.pco)plPickArrangement(b.dataset.pco,b.closest('li'),b);
+});
+$('#plSave').addEventListener('click',plSave);
+$('#plDel').addEventListener('click',async()=>{
+  if(!plDelArmed){plDelArmed=setTimeout(()=>{plDelArmed=null;renderPlEditor()},3000);renderPlEditor();return}
+  clearTimeout(plDelArmed);plDelArmed=null;
+  try{
+    const r=await rpc('delete_playlist',{p_pin:pin,p_id:plDraft.id});
+    if(r==='ok'){const nm=plDraft.name;plDraft=null;await loadPlaylists();renderPlEditor();plMsg(`Deleted “${nm}”.`,true)}
+    else{if(r==='bad_pin')lock();plMsg(PL_MSG[r]||"Couldn't delete it.");renderPlEditor()}
+  }catch(e){plMsg("Couldn't delete. Check the internet connection.")}
+});
+$('#plShow').addEventListener('click',async()=>{if(plDraft.dirty&&!(await plSave()))return;$('#plPane').hidden=true;showLocal(plDraft.id)});
+$('#plUse').addEventListener('click',async()=>{if(plDraft.dirty&&!(await plSave()))return;await activatePlaylist(plDraft.id);renderPlEditor()});
+$('#viewList').addEventListener('change',e=>showLocal(e.target.value));
+$('#practiceExit').addEventListener('click',()=>showLocal(null));
+
+/* output routing: collapsed unless opened */
+function renderRouteToggle(){
+  const open=!!S.routingOpen;$('#routeBody').hidden=!open;
+  $('#routeToggle').setAttribute('aria-expanded',String(open));
+}
+$('#routeToggle').addEventListener('click',()=>{S.routingOpen=!S.routingOpen;persist();renderRouteToggle()});
 
 $('#routeSel').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
@@ -1389,6 +1653,8 @@ document.addEventListener('keydown',e=>{
 /* iPad/iPhone: play through the silent switch like a music app */
 try{if(navigator.audioSession)navigator.audioSession.type='playback'}catch(e){}
 
+rebuildSet();
+renderRouteToggle();
 setView(S.view);
 applyLock();
 renderAll();
@@ -1396,7 +1662,7 @@ if(pin)verifyMe();
 if(syncedAt)setSync('busy','Using copy from '+fmtTime(syncedAt)+' · checking…');
 renderPco();
 $('#pcoSync').addEventListener('click',()=>syncPco(true));
-$('#planPick').addEventListener('change',e=>choosePlan(e.target.value));
+$('#planPick').addEventListener('change',e=>{const v=e.target.value;e.target.blur();if(v.startsWith('pl:'))activatePlaylist(v.slice(3));else choosePlan(v)});
 $('#planPick').addEventListener('focus',loadPlans);
 pull().then(()=>syncPco(false));
 setInterval(()=>{if(!document.hidden)pull()},30000);
