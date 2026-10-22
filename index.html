@@ -656,6 +656,7 @@ body.live-mark-ok .sheet [data-mark],body.live-mark-ok .pdfpages [data-mark]{cur
   <div class="team-card">
     <div class="setlist-head"><h2>Layout on this device</h2><button id="layoutClose">Done</button></div>
     <p class="note">Choose what to show, so the sound booth, drummer, keys player and guitar or bass can each see just what they need. <span id="lyWho"></span></p>
+    <button class="signed-only" id="lyLatest" style="justify-self:start">Use the layout from my last device</button>
     <h3>Quick picks</h3>
     <div class="presets" id="presets"></div>
     <h3>Or pick and choose</h3>
@@ -1994,7 +1995,7 @@ function renderPresets(){
   const nm=$('#lyName');
   if(document.activeElement!==nm&&document.activeElement!==$('#lyDesc')){nm.value=ed?cp.name:'';$('#lyDesc').value=ed?(cp.description||''):''}
   if(document.activeElement!==$('#lyShared'))$('#lyShared').checked=ed?!!cp.shared:false;
-  $('#lyWho').textContent=pin&&me?`Your layout follows you when you sign in as ${me.name} on any device.`:'Sign in to have your layout follow you to any iPad, phone or computer, and to save your own layouts.';
+  $('#lyWho').textContent=pin&&me?`${me.name}’s layout on this device. Each person keeps a separate layout on each device, so your iPad can show the pad and click while your phone shows chords. A device you haven’t used before starts with the last layout you used.`:'Sign in to keep your own layout on this device. Each person gets their own layout on each device.';
 }
 function useLayout(l){
   if(!l)return;
@@ -2022,6 +2023,7 @@ $('#layoutPane').addEventListener('click',e=>{if(e.target.id==='layoutPane')$('#
 $('#presets').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const p=presets.find(x=>x.id===b.dataset.id);if(!p)return;S.presetId=p.id;useLayout(p.layout);persist();lyMsg('');say('Layout: '+p.name+'.')});
 $('#panelChecks').addEventListener('change',e=>{const i=e.target;if(!i.dataset.panel)return;S.panels[i.dataset.panel]=i.checked;persist();applyLayout()});
 $('#lySaveNew').addEventListener('click',()=>savePreset(null));
+$('#lyLatest').addEventListener('click',async()=>{lyMsg('Getting your last layout…');await loadMyLayout(true,true,true);lyMsg('This device now uses the layout you last used.',true)});
 $('#lyUpdate').addEventListener('click',()=>{const cp=currentPreset();if(cp)savePreset(cp.id)});
 $('#lyDelete').addEventListener('click',async()=>{
   const cp=currentPreset();if(!cp)return;
@@ -2042,25 +2044,28 @@ function queueLayoutSync(){
     if(!pin||layoutLoadedFor!==pin)return;
     const j=JSON.stringify(layoutSnapshot());if(j===lastLayoutJSON)return;
     clearTimeout(layoutSyncTimer);
-    layoutSyncTimer=setTimeout(async()=>{try{const snap=layoutSnapshot();const r=await rpc('save_my_layout',{p_pin:pin,p_settings:snap});if(r==='ok')lastLayoutJSON=JSON.stringify(snap)}catch(e){}},1000);
+    layoutSyncTimer=setTimeout(async()=>{try{const snap=layoutSnapshot();const r=await rpc('save_my_layout',{p_pin:pin,p_settings:snap,p_device:layoutDevice()});if(r==='ok')lastLayoutJSON=JSON.stringify(snap)}catch(e){}},1000);
   }catch(e){}
 }
-async function loadMyLayout(force,applySettings=true){
+// Layouts are kept per person AND per device. A device someone hasn't used before starts with the last layout they used.
+function layoutDevice(){try{let d=localStorage.getItem('pc.device');if(!d){d=newId();localStorage.setItem('pc.device',d)}return d}catch(e){return null}}
+async function loadMyLayout(force,applySettings=true,takeLatest=false){
   if(!pin||(!force&&layoutLoadedFor===pin))return;
   const forPin=pin;
   try{
-    const r=await rpc('get_my_layout',{p_pin:pin});
+    const r=await rpc('get_my_layout',{p_pin:pin,p_device:layoutDevice()});
     if(pin!==forPin)return;
     if(!r||r.status!=='ok'){if(r&&r.status==='bad_pin')lock();return}
     presets=Array.isArray(r.presets)&&r.presets.length?r.presets:BUILTIN_PRESETS;
     try{localStorage.setItem('pc.presets',JSON.stringify(presets))}catch(e){}
-    const st=r.settings||{};
+    const st=(takeLatest?r.latest:r.settings)||{};
     if(applySettings&&st.panels){
       LAYOUT_KEYS.forEach(k=>{if(st[k]!==undefined)S[k]=st[k]});
       save('wpc.settings',S);
       applySplit();renderLibToggle();applyLayout();chartSig='';renderChart();
       lastLayoutJSON=JSON.stringify(layoutSnapshot());
       layoutLoadedFor=forPin;
+      if(takeLatest||r.from!=='device'){lastLayoutJSON=null;queueLayoutSync()}  // keep it as this device's own layout
     }else{
       layoutLoadedFor=forPin;
       if(applySettings&&!st.panels){lastLayoutJSON=null;queueLayoutSync()}
