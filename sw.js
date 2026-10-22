@@ -1,11 +1,12 @@
 // Keeps the app working when the church Wi-Fi drops.
 // The app files and fonts are cached; the song library is cached by the app itself.
 // When you change index.html, bump CACHE (v1 -> v2) so every device picks up the new version.
-const CACHE = 'padclick-v17';
+const CACHE = 'padclick-v18';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // cache: 'reload' skips the browser's own cache so a new version never installs yesterday's page
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', e => {
