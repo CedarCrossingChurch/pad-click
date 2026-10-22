@@ -639,7 +639,7 @@ body.live-mark-ok .sheet [data-mark],body.live-mark-ok .pdfpages [data-mark]{cur
     <div class="err" id="liveMsg" role="status"></div>
     <div id="liveSoundBox" hidden style="display:grid;gap:10px">
       <h3>Sound device</h3>
-      <p class="note">The device that plays the pad and click, usually the one plugged into the board. Only one device makes sound. The list shows devices that have been signed in during the last 15 minutes.</p>
+      <p class="note">The phone, tablet or computer that plays the pad and click, the one plugged into the board. Only one device makes sound. The list shows devices that have been signed in during the last 15 minutes.</p>
       <div class="sound-list" id="liveSoundList" role="radiogroup" aria-label="Sound device"></div>
     </div>
     <div id="liveGrantsBox" hidden style="display:grid;gap:10px">
@@ -647,7 +647,7 @@ body.live-mark-ok .sheet [data-mark],body.live-mark-ok .pdfpages [data-mark]{cur
       <p class="note">Pick what each person can control from their own device. <b>Songs</b> moves everyone to a song, <b>Pad</b> and <b>Click</b> start, stop and change them on the sound device, and <b>Chart</b> lets them tap a section or page to show it on everyone's screen. The leader controls everything, from any device they're signed in on.</p>
       <div style="overflow-x:auto"><table class="grants" id="liveGrants"></table></div>
     </div>
-    <div class="pl-row" id="liveDevRow" hidden><input type="text" id="liveDevName" maxlength="40" aria-label="Name for this device" placeholder="Name this device, e.g. Booth laptop"><button id="liveDevSave">Save name</button></div>
+    <div class="pl-row" id="liveDevRow" hidden><input type="text" id="liveDevName" maxlength="40" aria-label="Name for this device" placeholder="Name this device, e.g. Board iPad or Booth phone"><button id="liveDevSave">Save name</button></div>
     <p class="note">Following devices show the leader's song and chart and never make sound. Anyone can look ahead at another song and tap "Back to" the leader to rejoin.</p>
   </div>
 </section>
@@ -2519,6 +2519,7 @@ function renderLive(){
   if(!signed)you.textContent='Sign in so the leader can give you control of the songs, pad, click or chart.';
   else if(lead&&on)you.textContent=snd?'You control everything. Pick who else controls what below.':'You control everything from this device. The pad and click play only on the sound device.';
   else if(snd)you.textContent=`This device plays the pad and click for the band. ${nm} controls the session, and the buttons here still work in an emergency.`;
+  if(snd&&(/iPhone|iPad|Android/.test(navigator.userAgent)||navigator.maxTouchPoints>1))you.textContent+=' On a phone or tablet, keep this app open with the screen on, and turn on Do Not Disturb so calls and alerts don’t cut into the sound.';
   else{const a=(L.me&&L.me.areas)||[];you.textContent=!on?'':a.length?`You can control: ${a.map(x=>AREA_NAME[x]).join(', ')}.`:`You follow only. ${nm} can give you control of songs, pad, click or the chart.`}
   const dn=$('#liveDevName');if(dn&&document.activeElement!==dn)dn.value=(L.me&&L.me.device_label)||devLabel();
   $('#liveDevRow').hidden=!signed;
