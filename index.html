@@ -1585,7 +1585,7 @@ async function fetchChart(s){
   try{
     const r=await fetch(FN_URL,{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json'},body:JSON.stringify({action:'chart',pin,song_id:s.id,arrangement_id:s.arr||null})});
     const j=await r.json().catch(()=>({}));
-    if(j.ok){try{localStorage.setItem('pc.chart.'+id,JSON.stringify({linked:j.linked,chart:j.chart||'',chart_key:j.chart_key||null,arrangement:j.arrangement||null,arrangement_id:j.arrangement_id||null,pdfs:Array.isArray(j.pdfs)?j.pdfs:[],has_chords:j.has_chords,v:2,at:Date.now()}))}catch(e){}}
+    if(j.ok){try{localStorage.setItem('pc.chart.'+id,JSON.stringify({linked:j.linked,chart:j.chart||'',chart_key:j.chart_key||null,arrangement:j.arrangement||null,arrangement_id:j.arrangement_id||null,pdfs:Array.isArray(j.pdfs)?j.pdfs:[],has_chords:j.has_chords,v:3,at:Date.now()}))}catch(e){}}
     else if(r.status===403&&j.status==='bad_pin'){lock();say('Your PIN no longer works. Sign in again.')}
     else if(!readChart(id)){try{localStorage.setItem('pc.chart.'+id,JSON.stringify({error:j.error||"Couldn't load this chart.",at:Date.now()-540000}))}catch(e){}}
   }catch(e){}
@@ -1647,7 +1647,7 @@ function renderChart(){
   if(c.error){body.innerHTML='<div class="chart-empty"><p>'+escH(c.error)+'</p></div>';return}
   if(!c.linked){body.innerHTML='<div class="chart-empty"><p>This song isn’t linked to Planning Center, so there’s no chart to show. Songs come in linked when they’re part of a synced plan.</p></div>';return}
   // charts saved before PDFs were always listed: check Planning Center once more
-  if(c.v!==2&&!chartLoading.has(ck(s))){if(!c.chart.trim()&&!(c.pdfs&&c.pdfs.length)){body.innerHTML='<div class="chart-empty"><p>Checking Planning Center for a PDF chart…</p></div>';fetchChart(s);return}fetchChart(s)}
+  if(c.v!==3&&!chartLoading.has(ck(s))){if(!c.chart.trim()&&!(c.pdfs&&c.pdfs.length)){body.innerHTML='<div class="chart-empty"><p>Checking Planning Center for a PDF chart…</p></div>';fetchChart(s);return}fetchChart(s)}
   if(pdfMode){renderPdf(s,c,body);return}
   if(!c.chart.trim()){body.innerHTML='<div class="chart-empty"><p>No chord chart is typed in Planning Center for this arrangement'+(c.arrangement?' ('+escH(c.arrangement)+')':'')+', and no PDF is attached to it.</p><p>To get chords that transpose, import the song from SongSelect in Planning Center and choose <b>ChordPro (Editable)</b>.</p></div>';return}
   const keep=body.dataset.song===s.id?body.scrollTop:0;  // same song redrawing: keep the place
@@ -1694,9 +1694,23 @@ async function getPdfBytes(s,c,att){
   if(r.status===403&&j.status==='bad_pin'){lock();say('Your PIN no longer works. Sign in again.')}
   throw new Error(j.error||"Couldn't load the PDF.");
 }
+// SongSelect attaches a chart per key ("... Chart in Ab - Standard 1 column"): start with the one in the song's key
+const KEY_ALT=[['C','B#'],['Db','C#'],['D'],['Eb','D#'],['E','Fb'],['F','E#'],['F#','Gb'],['G'],['Ab','G#'],['A'],['Bb','A#'],['B','Cb']];
+function bestPdf(s,c){
+  const ks=KEY_ALT[((s.key%12)+12)%12];
+  const inKey=new RegExp('(?:\\bin |\\()('+ks.join('|')+')(?![#b\\w])');
+  const score=p=>(isLyricPdf(p)?-100:0)+(inKey.test(p.name)?10:0)+(/2 column/i.test(p.name)===(S.chartCols===2)?1:0);
+  return c.pdfs.slice().sort((a,b)=>score(b)-score(a))[0];
+}
+// Short button names: "Who Else - SongSelect Chart in Db - Standard 2 column (Db)" -> "Db · 2 column"
+function pdfLabel(s,p){
+  if(isLyricPdf(p))return 'Lyrics';
+  const m=p.name.match(/SongSelect Chart in ([A-G][#b]?)(?:.*?(\d) column)?/i);
+  return m?m[1]+(m[2]?' \u00b7 '+m[2]+' column':''):p.name.replace(new RegExp('^'+s.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s*-\\s*','i'),'');
+}
 async function renderPdf(s,c,body){
-  const tok=++pdfToken,sel=c.pdfs.find(p=>p.id===pdfPick[ck(s)])||c.pdfs[0];
-  const picks=c.pdfs.length>1?c.pdfs.map(p=>`<button data-pdf="${escH(p.id)}" aria-pressed="${p.id===sel.id}">${escH(p.name)}</button>`).join(''):'';
+  const tok=++pdfToken,sel=c.pdfs.find(p=>p.id===pdfPick[ck(s)])||bestPdf(s,c);
+  const picks=c.pdfs.length>1?c.pdfs.map(p=>`<button data-pdf="${escH(p.id)}" aria-pressed="${p.id===sel.id}">${escH(pdfLabel(s,p))}</button>`).join(''):'';
   body.innerHTML='<p class="chart-note">PDF from Planning Center, shown as written. It can’t be transposed to '+escH(KEYS[s.key])+'; for that, import the song from SongSelect as ChordPro (Editable).</p>'+
     '<div class="pdfbar">'+picks+`<button data-pdflight aria-pressed="${!!S.pdfLight}">Light page</button>`+((c.chart||'').trim()?`<button data-chartview="text">${chartHasChords(c)?'Show typed chords':'Show lyrics only'}</button>`:'')+'</div>'+
     '<div class="pdfpages'+(S.chartCols===2?' cols2':'')+(S.pdfLight?'':' dark')+'"><div class="chart-empty"><p>Loading the PDF…</p></div></div>';
@@ -2687,7 +2701,7 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)pull()});
 window.addEventListener('online',pull);
 window.addEventListener('offline',()=>setSync('off',syncedAt?'Offline · using copy from '+fmtTime(syncedAt):'Offline'));
 /* app updates: a new version takes over as soon as it's published (devices used to need a second open) */
-var APP_VERSION='20';
+var APP_VERSION='21';
 if('serviceWorker' in navigator){
   const hadCtrl=!!navigator.serviceWorker.controller;let reloading=false;
   navigator.serviceWorker.register('sw.js').then(reg=>{
