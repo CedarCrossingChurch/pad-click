@@ -1614,11 +1614,14 @@ function setMyOff(id,off){const m=myKeys();if(off)m[id]=off;else delete m[id];tr
 /* typed text vs PDF: many SongSelect imports are lyrics only, so show the attached PDF chord chart for those */
 function chartHasChords(c){if(typeof c.has_chords==='boolean')return c.has_chords;const t=c.chart||'';return /\[[A-G][^\]]*\]/.test(t)||t.split('\n').some(l=>isChordLine(l))}
 function chartViews(){try{return JSON.parse(localStorage.getItem('pc.chartView')||'{}')||{}}catch(e){return {}}}
+// Planning Center also lists the lyric sheet it makes itself ("<song> - lyrics"); that isn't a chord chart
+function isLyricPdf(p){return /^lyric_chart/i.test(p.id||'')||/[-–]\s*lyrics$/i.test(p.name||'')}
+function chordPdfs(c){return (c.pdfs||[]).filter(p=>!isLyricPdf(p))}
 function chartView(s,c){
   const pdf=!!(c.pdfs&&c.pdfs.length),txt=!!(c.chart||'').trim();
   if(!pdf)return 'text';if(!txt)return 'pdf';
   const pref=chartViews()[s.id];if(pref==='pdf'||pref==='text')return pref;
-  return chartHasChords(c)?'text':'pdf';
+  return chartHasChords(c)||!chordPdfs(c).length?'text':'pdf';
 }
 function setChartView(id,v){const m=chartViews();m[id]=v;try{localStorage.setItem('pc.chartView',JSON.stringify(m))}catch(e){}}
 function renderChart(){
@@ -1652,8 +1655,8 @@ function renderChart(){
   const from=noteIdx(c.chart_key);const semis=from==null?off:(tk-from+12)%12;
   let note=from==null?'Chart key isn’t set in Planning Center, so it’s shown as written.':semis?`Transposed from ${pretty(c.chart_key)} to ${KEYS[tk]}.`:`Chart in ${KEYS[tk]}.`;
   if(off)note=(from==null?`Moved ${off>6?12-off:off} half step${(off>6?12-off:off)>1?'s':''} ${off>6?'down':'up'} on this device. `:`Your key: ${KEYS[tk]}, on this device only. `)+`The band and pad are in ${KEYS[s.key]}.`;
-  const lyricsOnly=!chartHasChords(c),hasPdf=!!(c.pdfs&&c.pdfs.length);
-  if(lyricsOnly)note=hasPdf?'Planning Center has lyrics only typed in for this song.':'Lyrics only. No chords are typed in Planning Center for this song, and no PDF is attached.';
+  const lyricsOnly=!chartHasChords(c),hasPdf=chordPdfs(c).length>0;
+  if(lyricsOnly)note=hasPdf?'Planning Center has lyrics only typed in for this song.':'Lyrics only. Planning Center has no chords typed in for this song and no chord chart PDF attached.';
   const sw=hasPdf?`<button class="chart-switch" data-chartview="pdf">Show the PDF chord chart</button>`:'';
   body.innerHTML='<p class="chart-note">'+escH(note)+(c.arrangement?' Arrangement: '+escH(c.arrangement)+'.':'')+' '+sw+'</p><div class="sheet'+(S.chartCols===2?' cols2':'')+'">'+sheetHtml(c.chart,semis,FLAT_KEYS.has(tk))+'</div>';
   body.querySelectorAll('.sheet .sec').forEach((e,i)=>e.dataset.mark=i);
@@ -2684,7 +2687,7 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)pull()});
 window.addEventListener('online',pull);
 window.addEventListener('offline',()=>setSync('off',syncedAt?'Offline · using copy from '+fmtTime(syncedAt):'Offline'));
 /* app updates: a new version takes over as soon as it's published (devices used to need a second open) */
-var APP_VERSION='19';
+var APP_VERSION='20';
 if('serviceWorker' in navigator){
   const hadCtrl=!!navigator.serviceWorker.controller;let reloading=false;
   navigator.serviceWorker.register('sw.js').then(reg=>{
