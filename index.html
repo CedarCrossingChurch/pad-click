@@ -635,6 +635,7 @@ body.live-mark-ok .sheet [data-mark],body.live-mark-ok .pdfpages [data-mark]{cur
       <button id="liveEnd" class="danger" hidden>Stop leading</button>
     </div>
     <label class="check" id="liveFollowRow"><input type="checkbox" id="liveFollow"> Follow the leader on this device</label>
+    <label class="check" id="liveScrollRow"><input type="checkbox" id="liveScroll"> Scroll the chart with the leader</label>
     <p class="note" id="liveYou"></p>
     <div class="err" id="liveMsg" role="status"></div>
     <div id="liveSoundBox" hidden style="display:grid;gap:10px">
@@ -1634,13 +1635,15 @@ function renderChart(){
   if(!c.chart.trim()&&c.pdfs===undefined){body.innerHTML='<div class="chart-empty"><p>Checking Planning Center for a PDF chart…</p></div>';fetchChart(s);return}
   if(!c.chart.trim()&&c.pdfs.length){renderPdf(s,c,body);return}
   if(!c.chart.trim()){body.innerHTML='<div class="chart-empty"><p>No chord chart is typed in Planning Center for this arrangement'+(c.arrangement?' ('+escH(c.arrangement)+')':'')+', and no PDF is attached to it.</p><p>To get chords that transpose, import the song from SongSelect in Planning Center and choose <b>ChordPro (Editable)</b>.</p></div>';return}
+  const keep=body.dataset.song===s.id?body.scrollTop:0;  // same song redrawing: keep the place
   const off=myOff(s.id),tk=(s.key+off)%12;
   const from=noteIdx(c.chart_key);const semis=from==null?off:(tk-from+12)%12;
   let note=from==null?'Chart key isn’t set in Planning Center, so it’s shown as written.':semis?`Transposed from ${pretty(c.chart_key)} to ${KEYS[tk]}.`:`Chart in ${KEYS[tk]}.`;
   if(off)note=(from==null?`Moved ${off>6?12-off:off} half step${(off>6?12-off:off)>1?'s':''} ${off>6?'down':'up'} on this device. `:`Your key: ${KEYS[tk]}, on this device only. `)+`The band and pad are in ${KEYS[s.key]}.`;
   body.innerHTML='<p class="chart-note">'+escH(note)+(c.arrangement?' Arrangement: '+escH(c.arrangement)+'.':'')+'</p><div class="sheet'+(S.chartCols===2?' cols2':'')+'">'+sheetHtml(c.chart,semis,FLAT_KEYS.has(tk))+'</div>';
   body.querySelectorAll('.sheet .sec').forEach((e,i)=>e.dataset.mark=i);
-  body.scrollTop=0;liveMarkApply(true);
+  body.dataset.song=s.id;
+  if(window.L)L.progScrollAt=Date.now();body.scrollTop=keep;liveMarkApply(true);if(!keep)liveScrollApply(true);
   if(kw){
     const sel=$('#chKey');sel.innerHTML='';
     KEYS.forEach((k,i)=>{const d=(i-s.key+12)%12;const o=new Option(i===s.key?`${k} (band key)`:`${k} (${d<=6?'+'+d:'−'+(12-d)})`,String(d));if(d===off)o.selected=true;sel.add(o)});
@@ -1679,7 +1682,7 @@ async function renderPdf(s,c,body){
   body.innerHTML='<p class="chart-note">PDF from Planning Center, shown as written. It can’t be transposed to '+escH(KEYS[s.key])+'; for that, import the song from SongSelect as ChordPro (Editable).</p>'+
     '<div class="pdfbar">'+picks+`<button data-pdflight aria-pressed="${!!S.pdfLight}">Light page</button></div>`+
     '<div class="pdfpages'+(S.chartCols===2?' cols2':'')+(S.pdfLight?'':' dark')+'"><div class="chart-empty"><p>Loading the PDF…</p></div></div>';
-  body.scrollTop=0;
+  if(window.L)L.progScrollAt=Date.now();body.scrollTop=0;
   const box=body.querySelector('.pdfpages');
   try{
     const docKey=ck(s)+'/'+sel.id;
@@ -1706,7 +1709,7 @@ async function renderPdf(s,c,body){
       if(i===1)box.innerHTML='';
       cv.dataset.mark=i-1;box.appendChild(cv);
     }
-    pdfShownW=body.clientWidth;liveMarkApply(true);
+    pdfShownW=body.clientWidth;liveMarkApply(true);liveScrollApply(true);
   }catch(e){
     if(tok!==pdfToken)return;
     box.innerHTML='<div class="chart-empty"><p>'+escH(navigator.onLine?(e&&e.message)||"Couldn't show the PDF.":'This PDF hasn’t been opened on this device yet, so it isn’t saved for offline use. Open it once while online.')+'</p></div>';
@@ -1750,10 +1753,12 @@ async function loadPlaylists(){
   try{
     const r=await rpc('list_playlists',{p_pin:pin});
     if(r&&r.status==='ok'){
+      const was=JSON.stringify(playlists);
       playlists=r.playlists||[];
       try{localStorage.setItem('pc.playlists',JSON.stringify(playlists))}catch(e){}
       if(S.localList&&!playlists.some(p=>p.id===S.localList)){S.localList=null;persist()}
-      rebuildSet();renderSongs();fillSource();renderPlPick();chartSig='';renderChart();
+      // only redraw when the playlists actually changed, so the chart doesn't jump every 30 seconds
+      if(was!==JSON.stringify(playlists)){rebuildSet();renderSongs();fillSource();renderPlPick();chartSig='';renderChart()}else renderPlPick();
     }else if(r&&r.status==='bad_pin'){lock();say('Your saved PIN no longer works. Sign in again.')}
   }catch(e){}
 }
@@ -2222,6 +2227,7 @@ function liveState(r,fetched){
   liveBeat();
   liveRequests(prev,r);
   liveMarkApply(false);
+  liveScrollApply(false);
   renderLive();
 }
 const changed=(a,b,k)=>!a||a[k]!==b[k];
@@ -2395,6 +2401,54 @@ function liveMarkApply(force){
     if(L.st.by_device!==devId){const top=el.offsetTop-body.offsetTop-8;body.scrollTo({top:Math.max(0,top),behavior:'smooth'})}}
 }
 
+/* chart scrolling follows the leader (and anyone with Chart control) */
+// Position = section (or PDF page) number + how far into it, so it lines up on any screen or text size.
+function canScrollLead(){return canMark()}
+function chartTop(el,body){return el.getBoundingClientRect().top-body.getBoundingClientRect().top+body.scrollTop}
+function scrollAnchor(){
+  const body=$('#chartBody');if(!body)return null;
+  const els=[...body.querySelectorAll('[data-mark]')];if(!els.length)return null;
+  const top=body.scrollTop+2;let best=null,bt=-1;
+  els.forEach(e=>{const t=chartTop(e,body);if(t<=top&&t>bt){bt=t;best=e}});
+  if(!best)return 0;
+  const h=best.offsetHeight||1,frac=Math.max(0,Math.min(0.9999,(top-2-bt)/h));
+  return Math.round((+best.dataset.mark+frac)*10000)/10000;
+}
+function liveScrollSend(){
+  const s=currentSong();if(!s||!canScrollLead())return;
+  const pos=scrollAnchor();if(pos==null)return;
+  L.scrollKey=L.scrollSent=s.id+':'+pos;Object.assign(L.st,{scroll_pos:pos,scroll_song:s.id});
+  liveSend({scroll_pos:pos,scroll_song:s.id},true);
+}
+function liveScrollApply(force){
+  if(!L||!L.st||S.liveScroll===false)return;
+  const st=L.st,s=currentSong(),body=$('#chartBody');if(!s||!body)return;
+  if(!((following()&&!L.peek)||isSound())||st.scroll_song!==s.id||st.scroll_pos==null)return;
+  const key=s.id+':'+(+st.scroll_pos);
+  if(key===L.scrollSent||(!force&&key===L.scrollKey))return;  // never move the device that did the scrolling
+  if(Date.now()<(L.scrollHold||0))return;
+  const pos=+st.scroll_pos,idx=Math.floor(pos),frac=pos-idx;
+  const el=body.querySelector(`[data-mark="${idx}"]`);if(!el)return;
+  L.scrollKey=key;
+  const top=Math.max(0,chartTop(el,body)+frac*el.offsetHeight-2);
+  if(Math.abs(top-body.scrollTop)<6)return;
+  L.progScrollAt=Date.now();
+  body.scrollTo({top,behavior:Math.abs(top-body.scrollTop)>body.clientHeight*1.5?'auto':'smooth'});
+}
+(()=>{
+  const body=$('#chartBody');if(!body)return;
+  ['wheel','touchstart','touchmove','pointerdown','keydown'].forEach(ev=>body.addEventListener(ev,()=>{L.userAt=Date.now()},{passive:true}));
+  let t=null,last=0;
+  body.addEventListener('scroll',()=>{
+    if(!L||!L.st||Date.now()-(L.progScrollAt||0)<700||Date.now()-(L.userAt||0)>2000)return;
+    if(canScrollLead()){
+      const now=Date.now();clearTimeout(t);
+      if(now-last>250){last=now;liveScrollSend()}
+      t=setTimeout(()=>{last=Date.now();liveScrollSend()},200);
+    }else if(following())L.scrollHold=Date.now()+8000;  // a follower scrolling on their own: let them, for a few seconds
+  },{passive:true});
+})();
+
 /* sign this device in for live mode */
 async function liveJoin(){
   if(!pin)return;
@@ -2520,6 +2574,8 @@ function renderLive(){
   eb.textContent=lead?'Stop leading':`End ${nm}’s session`;
   $('#liveFollowRow').hidden=snd;
   $('#liveFollow').checked=S.follow!==false;
+  $('#liveScrollRow').hidden=!!(lead&&on&&!f&&!snd)||(!f&&!snd);
+  $('#liveScroll').checked=S.liveScroll!==false;
   const you=$('#liveYou');
   if(!signed)you.textContent='Sign in so the leader can give you control of the songs, pad, click or chart.';
   else if(lead&&on)you.textContent=snd?'You control everything. Pick who else controls what below.':'You control everything from this device. The pad and click play only on the sound device.';
@@ -2540,6 +2596,7 @@ $('#liveAsk').addEventListener('click',liveAsk);
 $('#liveAskCancel').addEventListener('click',liveCancelAsk);
 $('#liveEnd').addEventListener('click',liveEnd);
 $('#liveFollow').addEventListener('change',e=>{S.follow=e.target.checked;persist();L.peek=false;L.wasFollowing=false;if(L.st)liveState(Object.assign({},L.st));renderAll();renderLive()});
+$('#liveScroll').addEventListener('change',e=>{S.liveScroll=e.target.checked;persist();if(S.liveScroll){L.scrollHold=0;liveScrollApply(true)}});
 $('#liveSoundList').addEventListener('change',e=>{const r=e.target.closest('input[name=liveSound]');if(r)liveSetSound(r.value||null)});
 $('#liveDevSave').addEventListener('click',async()=>{
   const v=$('#liveDevName').value.trim().slice(0,40);if(!v)return;
