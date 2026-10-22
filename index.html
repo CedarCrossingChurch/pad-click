@@ -301,6 +301,7 @@ body.view-chart .audio-only{display:none!important}
 .ch-key[hidden]{display:none}
 .ch-key select{width:auto;min-height:36px;padding:4px 8px;font-size:14px}
 .ch-key.mine select{border-color:var(--click);color:var(--click)}
+.chart-switch{display:inline-block;margin-left:6px;min-height:32px;padding:4px 10px;font-family:var(--f-body);font-size:13px;border-color:var(--click);color:var(--click)}
 .pdfbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}
 .pdfbar button{min-height:40px;padding:6px 12px;font-size:14px}
 .pdfbar button[aria-pressed="true"]{border-color:var(--pad);color:var(--text)}
@@ -1584,7 +1585,7 @@ async function fetchChart(s){
   try{
     const r=await fetch(FN_URL,{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json'},body:JSON.stringify({action:'chart',pin,song_id:s.id,arrangement_id:s.arr||null})});
     const j=await r.json().catch(()=>({}));
-    if(j.ok){try{localStorage.setItem('pc.chart.'+id,JSON.stringify({linked:j.linked,chart:j.chart||'',chart_key:j.chart_key||null,arrangement:j.arrangement||null,arrangement_id:j.arrangement_id||null,pdfs:Array.isArray(j.pdfs)?j.pdfs:[],at:Date.now()}))}catch(e){}}
+    if(j.ok){try{localStorage.setItem('pc.chart.'+id,JSON.stringify({linked:j.linked,chart:j.chart||'',chart_key:j.chart_key||null,arrangement:j.arrangement||null,arrangement_id:j.arrangement_id||null,pdfs:Array.isArray(j.pdfs)?j.pdfs:[],has_chords:j.has_chords,v:2,at:Date.now()}))}catch(e){}}
     else if(r.status===403&&j.status==='bad_pin'){lock();say('Your PIN no longer works. Sign in again.')}
     else if(!readChart(id)){try{localStorage.setItem('pc.chart.'+id,JSON.stringify({error:j.error||"Couldn't load this chart.",at:Date.now()-540000}))}catch(e){}}
   }catch(e){}
@@ -1610,6 +1611,16 @@ function renderNow(){
 function myKeys(){try{return JSON.parse(localStorage.getItem('pc.myKey')||'{}')||{}}catch(e){return {}}}
 function myOff(id){const v=myKeys()[id];return Number.isInteger(v)?((v%12)+12)%12:0}
 function setMyOff(id,off){const m=myKeys();if(off)m[id]=off;else delete m[id];try{localStorage.setItem('pc.myKey',JSON.stringify(m))}catch(e){}}
+/* typed text vs PDF: many SongSelect imports are lyrics only, so show the attached PDF chord chart for those */
+function chartHasChords(c){if(typeof c.has_chords==='boolean')return c.has_chords;const t=c.chart||'';return /\[[A-G][^\]]*\]/.test(t)||t.split('\n').some(l=>isChordLine(l))}
+function chartViews(){try{return JSON.parse(localStorage.getItem('pc.chartView')||'{}')||{}}catch(e){return {}}}
+function chartView(s,c){
+  const pdf=!!(c.pdfs&&c.pdfs.length),txt=!!(c.chart||'').trim();
+  if(!pdf)return 'text';if(!txt)return 'pdf';
+  const pref=chartViews()[s.id];if(pref==='pdf'||pref==='text')return pref;
+  return chartHasChords(c)?'text':'pdf';
+}
+function setChartView(id,v){const m=chartViews();m[id]=v;try{localStorage.setItem('pc.chartView',JSON.stringify(m))}catch(e){}}
 function renderChart(){
   renderNow();
   const s=currentSong(),body=$('#chartBody');if(!body)return;
@@ -1620,8 +1631,8 @@ function renderChart(){
   body.style.setProperty('--chart-size',S.chartSize+'px');
   if(document.body.classList.contains('view-mixer'))return;
   const c=s&&pin?readChart(ck(s)):null;
-  const pdfMode=!!(c&&c.linked&&!c.error&&!(c.chart||'').trim()&&c.pdfs&&c.pdfs.length);
-  const sig=[!!pin,s&&s.id,s&&s.arr,s&&s.key,s&&myOff(s.id),c&&c.at,S.chartCols,pdfMode?S.chartSize+'|'+(S.pdfLight?1:0)+'|'+(pdfPick[ck(s)]||''):''].join('|');
+  const pdfMode=!!(c&&c.linked&&!c.error&&c.pdfs&&s&&chartView(s,c)==='pdf');
+  const sig=[!!pin,s&&s.id,s&&s.arr,s&&s.key,s&&myOff(s.id),c&&c.at,S.chartCols,pdfMode?'pdf':'txt',pdfMode?S.chartSize+'|'+(S.pdfLight?1:0)+'|'+(pdfPick[ck(s)]||''):''].join('|');
   if(sig===chartSig){if(kw&&s&&c&&c.linked&&(c.chart||'').trim())kw.hidden=false;return}chartSig=sig;
   if(!pin){
     body.innerHTML='<form class="chart-signin" id="chSignin"><p>Sign in with your PIN to see chord charts.</p><input type="password" id="chPin" inputmode="numeric" autocomplete="off" aria-label="Your PIN" maxlength="40"><button type="submit">Sign in</button><span class="err" id="chErr"></span></form>';
@@ -1632,15 +1643,19 @@ function renderChart(){
   if(Date.now()-c.at>600000&&navigator.onLine)fetchChart(s);
   if(c.error){body.innerHTML='<div class="chart-empty"><p>'+escH(c.error)+'</p></div>';return}
   if(!c.linked){body.innerHTML='<div class="chart-empty"><p>This song isn’t linked to Planning Center, so there’s no chart to show. Songs come in linked when they’re part of a synced plan.</p></div>';return}
-  if(!c.chart.trim()&&c.pdfs===undefined){body.innerHTML='<div class="chart-empty"><p>Checking Planning Center for a PDF chart…</p></div>';fetchChart(s);return}
-  if(!c.chart.trim()&&c.pdfs.length){renderPdf(s,c,body);return}
+  // charts saved before PDFs were always listed: check Planning Center once more
+  if(c.v!==2&&!chartLoading.has(ck(s))){if(!c.chart.trim()&&!(c.pdfs&&c.pdfs.length)){body.innerHTML='<div class="chart-empty"><p>Checking Planning Center for a PDF chart…</p></div>';fetchChart(s);return}fetchChart(s)}
+  if(pdfMode){renderPdf(s,c,body);return}
   if(!c.chart.trim()){body.innerHTML='<div class="chart-empty"><p>No chord chart is typed in Planning Center for this arrangement'+(c.arrangement?' ('+escH(c.arrangement)+')':'')+', and no PDF is attached to it.</p><p>To get chords that transpose, import the song from SongSelect in Planning Center and choose <b>ChordPro (Editable)</b>.</p></div>';return}
   const keep=body.dataset.song===s.id?body.scrollTop:0;  // same song redrawing: keep the place
   const off=myOff(s.id),tk=(s.key+off)%12;
   const from=noteIdx(c.chart_key);const semis=from==null?off:(tk-from+12)%12;
   let note=from==null?'Chart key isn’t set in Planning Center, so it’s shown as written.':semis?`Transposed from ${pretty(c.chart_key)} to ${KEYS[tk]}.`:`Chart in ${KEYS[tk]}.`;
   if(off)note=(from==null?`Moved ${off>6?12-off:off} half step${(off>6?12-off:off)>1?'s':''} ${off>6?'down':'up'} on this device. `:`Your key: ${KEYS[tk]}, on this device only. `)+`The band and pad are in ${KEYS[s.key]}.`;
-  body.innerHTML='<p class="chart-note">'+escH(note)+(c.arrangement?' Arrangement: '+escH(c.arrangement)+'.':'')+'</p><div class="sheet'+(S.chartCols===2?' cols2':'')+'">'+sheetHtml(c.chart,semis,FLAT_KEYS.has(tk))+'</div>';
+  const lyricsOnly=!chartHasChords(c),hasPdf=!!(c.pdfs&&c.pdfs.length);
+  if(lyricsOnly)note=hasPdf?'Planning Center has lyrics only typed in for this song.':'Lyrics only. No chords are typed in Planning Center for this song, and no PDF is attached.';
+  const sw=hasPdf?`<button class="chart-switch" data-chartview="pdf">Show the PDF chord chart</button>`:'';
+  body.innerHTML='<p class="chart-note">'+escH(note)+(c.arrangement?' Arrangement: '+escH(c.arrangement)+'.':'')+' '+sw+'</p><div class="sheet'+(S.chartCols===2?' cols2':'')+'">'+sheetHtml(c.chart,semis,FLAT_KEYS.has(tk))+'</div>';
   body.querySelectorAll('.sheet .sec').forEach((e,i)=>e.dataset.mark=i);
   body.dataset.song=s.id;
   if(window.L)L.progScrollAt=Date.now();body.scrollTop=keep;liveMarkApply(true);if(!keep)liveScrollApply(true);
@@ -1680,7 +1695,7 @@ async function renderPdf(s,c,body){
   const tok=++pdfToken,sel=c.pdfs.find(p=>p.id===pdfPick[ck(s)])||c.pdfs[0];
   const picks=c.pdfs.length>1?c.pdfs.map(p=>`<button data-pdf="${escH(p.id)}" aria-pressed="${p.id===sel.id}">${escH(p.name)}</button>`).join(''):'';
   body.innerHTML='<p class="chart-note">PDF from Planning Center, shown as written. It can’t be transposed to '+escH(KEYS[s.key])+'; for that, import the song from SongSelect as ChordPro (Editable).</p>'+
-    '<div class="pdfbar">'+picks+`<button data-pdflight aria-pressed="${!!S.pdfLight}">Light page</button></div>`+
+    '<div class="pdfbar">'+picks+`<button data-pdflight aria-pressed="${!!S.pdfLight}">Light page</button>`+((c.chart||'').trim()?`<button data-chartview="text">${chartHasChords(c)?'Show typed chords':'Show lyrics only'}</button>`:'')+'</div>'+
     '<div class="pdfpages'+(S.chartCols===2?' cols2':'')+(S.pdfLight?'':' dark')+'"><div class="chart-empty"><p>Loading the PDF…</p></div></div>';
   if(window.L)L.progScrollAt=Date.now();body.scrollTop=0;
   const box=body.querySelector('.pdfpages');
@@ -1707,7 +1722,7 @@ async function renderPdf(s,c,body){
       await page.render({canvas:cv,canvasContext:cv.getContext('2d'),viewport:vp}).promise;
       if(tok!==pdfToken)return;
       if(i===1)box.innerHTML='';
-      cv.dataset.mark=i-1;box.appendChild(cv);
+      cv.dataset.mark=500+i-1;box.appendChild(cv);  // pages are 500+, sections 0+, so the two never get mixed up
     }
     pdfShownW=body.clientWidth;liveMarkApply(true);liveScrollApply(true);
   }catch(e){
@@ -1716,6 +1731,8 @@ async function renderPdf(s,c,body){
   }
 }
 $('#chartBody').addEventListener('click',e=>{
+  const v=e.target.closest('[data-chartview]');
+  if(v){const s=currentSong();if(s){setChartView(s.id,v.dataset.chartview);chartSig='';renderChart()}return}
   const p=e.target.closest('[data-pdf]'),l=e.target.closest('[data-pdflight]');
   if(!p&&!l){const m=e.target.closest('[data-mark]');if(m)liveMarkTap(+m.dataset.mark);return}
   const s=currentSong();if(!s||(!p&&!l))return;
@@ -2667,7 +2684,7 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)pull()});
 window.addEventListener('online',pull);
 window.addEventListener('offline',()=>setSync('off',syncedAt?'Offline · using copy from '+fmtTime(syncedAt):'Offline'));
 /* app updates: a new version takes over as soon as it's published (devices used to need a second open) */
-var APP_VERSION='18';
+var APP_VERSION='19';
 if('serviceWorker' in navigator){
   const hadCtrl=!!navigator.serviceWorker.controller;let reloading=false;
   navigator.serviceWorker.register('sw.js').then(reg=>{
