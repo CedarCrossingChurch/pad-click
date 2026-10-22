@@ -649,7 +649,7 @@ body.live-mark-ok .sheet [data-mark],body.live-mark-ok .pdfpages [data-mark]{cur
       <div style="overflow-x:auto"><table class="grants" id="liveGrants"></table></div>
     </div>
     <div class="pl-row" id="liveDevRow" hidden><input type="text" id="liveDevName" maxlength="40" aria-label="Name for this device" placeholder="Name this device, e.g. Board iPad or Booth phone"><button id="liveDevSave">Save name</button></div>
-    <p class="note">Following devices show the leader's song and chart and never make sound. Anyone can look ahead at another song and tap "Back to" the leader to rejoin.</p>
+    <p class="note">Following devices show the leader's song and chart and never make sound. Anyone can look ahead at another song and tap "Back to" the leader to rejoin. <span id="appVer"></span></p>
   </div>
 </section>
 <div class="live-toast" id="liveToast" hidden role="alert"><p id="liveToastText"></p><div class="live-toast-btns" id="liveToastBtns"></div></div>
@@ -2408,11 +2408,11 @@ function chartTop(el,body){return el.getBoundingClientRect().top-body.getBoundin
 function scrollAnchor(){
   const body=$('#chartBody');if(!body)return null;
   const els=[...body.querySelectorAll('[data-mark]')];if(!els.length)return null;
-  const top=body.scrollTop+2;let best=null,bt=-1;
-  els.forEach(e=>{const t=chartTop(e,body);if(t<=top&&t>bt){bt=t;best=e}});
-  if(!best)return 0;
-  const h=best.offsetHeight||1,frac=Math.max(0,Math.min(0.9999,(top-2-bt)/h));
-  return Math.round((+best.dataset.mark+frac)*10000)/10000;
+  const top=body.scrollTop;
+  const list=els.map(e=>({e,t:chartTop(e,body),h:e.offsetHeight||1})).sort((a,b)=>a.t-b.t);
+  const hit=list.find(x=>x.t+x.h>top+1)||list[list.length-1];
+  const frac=Math.max(0,Math.min(0.9999,(top-hit.t)/hit.h));
+  return Math.round((+hit.e.dataset.mark+frac)*10000)/10000;
 }
 function liveScrollSend(){
   const s=currentSong();if(!s||!canScrollLead())return;
@@ -2430,7 +2430,7 @@ function liveScrollApply(force){
   const pos=+st.scroll_pos,idx=Math.floor(pos),frac=pos-idx;
   const el=body.querySelector(`[data-mark="${idx}"]`);if(!el)return;
   L.scrollKey=key;
-  const top=Math.max(0,chartTop(el,body)+frac*el.offsetHeight-2);
+  const top=Math.max(0,chartTop(el,body)+frac*el.offsetHeight);
   if(Math.abs(top-body.scrollTop)<6)return;
   L.progScrollAt=Date.now();
   body.scrollTo({top,behavior:Math.abs(top-body.scrollTop)>body.clientHeight*1.5?'auto':'smooth'});
@@ -2582,6 +2582,7 @@ function renderLive(){
   else if(snd)you.textContent=`This device plays the pad and click for the band. ${nm} controls the session, and the buttons here still work in an emergency.`;
   if(snd&&(/iPhone|iPad|Android/.test(navigator.userAgent)||navigator.maxTouchPoints>1))you.textContent+=' On a phone or tablet, keep this app open with the screen on, and turn on Do Not Disturb so calls and alerts don’t cut into the sound.';
   else{const a=(L.me&&L.me.areas)||[];you.textContent=!on?'':a.length?`You can control: ${a.map(x=>AREA_NAME[x]).join(', ')}.`:`You follow only. ${nm} can give you control of songs, pad, click or the chart.`}
+  const av=$('#appVer');if(av)av.textContent=`App version ${APP_VERSION}.`;
   const dn=$('#liveDevName');if(dn&&document.activeElement!==dn)dn.value=(L.me&&L.me.device_label)||devLabel();
   $('#liveDevRow').hidden=!signed;
   renderSoundPick();renderGrants();
@@ -2665,7 +2666,23 @@ setInterval(()=>{if(!document.hidden)syncPco(false)},600000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)pull()});
 window.addEventListener('online',pull);
 window.addEventListener('offline',()=>setSync('off',syncedAt?'Offline · using copy from '+fmtTime(syncedAt):'Offline'));
-if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{})}
+/* app updates: a new version takes over as soon as it's published (devices used to need a second open) */
+var APP_VERSION='18';
+if('serviceWorker' in navigator){
+  const hadCtrl=!!navigator.serviceWorker.controller;let reloading=false;
+  navigator.serviceWorker.register('sw.js').then(reg=>{
+    const check=()=>{try{reg.update()}catch(e){}};
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden)check()});
+    setInterval(check,5*60000);
+  }).catch(()=>{});
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(!hadCtrl||reloading)return;
+    const go=()=>{reloading=true;location.reload()};
+    // don't cut the sound off: if the pad or click is playing, ask first
+    if(!running&&!padOn)go();
+    else liveToast('A new version of the app is ready.',[['Update now',go,'go'],['After this song',()=>liveToastHide()]],0,'update');
+  });
+}
 })();
 </script>
 </body>
