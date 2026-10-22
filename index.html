@@ -297,6 +297,10 @@ body.view-chart .audio-only{display:none!important}
 .sheet .gap{height:.5em}
 .sheet .note-line{color:var(--muted);font-style:italic;font-size:.85em}
 .chart-empty{color:var(--muted);max-width:56ch;display:grid;gap:12px;padding-block:24px}
+.ch-key{display:inline-flex;align-items:center;gap:6px;font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.ch-key[hidden]{display:none}
+.ch-key select{width:auto;min-height:36px;padding:4px 8px;font-size:14px}
+.ch-key.mine select{border-color:var(--click);color:var(--click)}
 .pdfbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}
 .pdfbar button{min-height:40px;padding:6px 12px;font-size:14px}
 .pdfbar button[aria-pressed="true"]{border-color:var(--pad);color:var(--text)}
@@ -364,9 +368,19 @@ body.locked .signed-only{display:none!important}
 .live-btn[hidden]{display:none!important}
 .live-btn{display:inline-flex;align-items:center;gap:8px;font-size:13px;padding:7px 12px}
 .live-btn::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--muted);flex:0 0 auto}
-.live-btn.lead{border-color:var(--warn);color:var(--fg)}.live-btn.lead::before{background:var(--warn);box-shadow:0 0 0 3px rgba(229,99,79,.25)}
 .live-btn.follow{border-color:var(--ok);color:var(--fg)}.live-btn.follow::before{background:var(--ok)}
 .live-btn.peek{border-color:var(--click);color:var(--fg)}.live-btn.peek::before{background:var(--click)}
+.live-btn.lead{border-color:var(--ok);color:var(--fg)}.live-btn.lead::before{background:var(--ok);box-shadow:none}
+.live-btn.sound{border-color:var(--warn);color:var(--fg)}.live-btn.sound::before{background:var(--warn);box-shadow:0 0 0 3px rgba(229,99,79,.25)}
+.sound-list{display:grid;gap:6px}
+.sound-opt{padding:8px 10px;border:1px solid var(--line);border-radius:5px;background:var(--panel-2)}
+.sound-opt input{width:20px;height:20px;accent-color:var(--warn)}
+.sound-opt span{display:grid}.sound-opt b{font-weight:600;font-size:15px}.sound-opt small{color:var(--muted);font-size:12px}
+.live-toast{position:fixed;left:50%;bottom:max(16px,env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:40;width:min(560px,calc(100vw - 32px));background:var(--panel-2);border:1px solid var(--click);border-radius:8px;padding:14px 16px;box-shadow:0 10px 30px rgba(0,0,0,.5);display:grid;gap:10px}
+.live-toast[hidden]{display:none}
+.live-toast p{margin:0;font-size:16px;line-height:1.35}
+.live-toast-btns{display:flex;flex-wrap:wrap;gap:8px}.live-toast-btns button{flex:1 1 auto;min-height:44px}
+.live-toast-btns .go{border-color:var(--ok);color:var(--ok)}
 .live-btn.stale::before{background:var(--muted);box-shadow:none}
 body.live-follow.live-no-click .strip.click :is(.big,.nudge,#tap,#meterSel button,#bpm),
 body.live-follow.live-no-pad .strip.pad :is(.big,.key){opacity:.45}
@@ -579,6 +593,7 @@ body.live-mark-ok .sheet [data-mark],body.live-mark-ok .pdfpages [data-mark]{cur
       <button id="chSmaller" aria-label="Smaller chart text">A−</button>
       <button id="chBigger" aria-label="Larger chart text">A+</button>
       <button id="chCols" aria-label="Switch between one and two columns">1 col</button>
+      <label class="ch-key" id="chKeyWrap" hidden><span>My key</span><select id="chKey" aria-label="Chart key on this device only"></select></label>
       <button class="layout-btn" aria-haspopup="dialog">Layout</button>
       <button class="live-btn" aria-haspopup="dialog" hidden>Live</button>
     </div>
@@ -615,19 +630,28 @@ body.live-mark-ok .sheet [data-mark],body.live-mark-ok .pdfpages [data-mark]{cur
     <p class="live-status" id="liveStatus" role="status"></p>
     <div class="pl-actions" id="liveActions">
       <button id="liveLead" hidden>Lead from this device</button>
+      <button id="liveAsk" hidden>Ask to lead</button>
+      <button id="liveAskCancel" hidden>Cancel my request</button>
       <button id="liveEnd" class="danger" hidden>Stop leading</button>
     </div>
     <label class="check" id="liveFollowRow"><input type="checkbox" id="liveFollow"> Follow the leader on this device</label>
     <p class="note" id="liveYou"></p>
     <div class="err" id="liveMsg" role="status"></div>
+    <div id="liveSoundBox" hidden style="display:grid;gap:10px">
+      <h3>Sound device</h3>
+      <p class="note">The device that plays the pad and click, usually the one plugged into the board. Only one device makes sound. The list shows devices that have been signed in during the last 15 minutes.</p>
+      <div class="sound-list" id="liveSoundList" role="radiogroup" aria-label="Sound device"></div>
+    </div>
     <div id="liveGrantsBox" hidden style="display:grid;gap:10px">
       <h3>Who can control</h3>
-      <p class="note">Pick what each person can control from their own device. <b>Songs</b> moves everyone to a song, <b>Pad</b> and <b>Click</b> start, stop and change them, and <b>Chart</b> lets them tap a section or page to show it on everyone's screen. Whoever is leading controls everything, from any device they're signed in on.</p>
+      <p class="note">Pick what each person can control from their own device. <b>Songs</b> moves everyone to a song, <b>Pad</b> and <b>Click</b> start, stop and change them on the sound device, and <b>Chart</b> lets them tap a section or page to show it on everyone's screen. The leader controls everything, from any device they're signed in on.</p>
       <div style="overflow-x:auto"><table class="grants" id="liveGrants"></table></div>
     </div>
-    <p class="note">The lead device is the only one that makes sound, so lead from the iPad or computer that's plugged into the board. Everyone else follows: their chart and song follow the leader, and the pad and click buttons control the lead device if they've been given that part.</p>
+    <div class="pl-row" id="liveDevRow" hidden><input type="text" id="liveDevName" maxlength="40" aria-label="Name for this device" placeholder="Name this device, e.g. Booth laptop"><button id="liveDevSave">Save name</button></div>
+    <p class="note">Following devices show the leader's song and chart and never make sound. Anyone can look ahead at another song and tap "Back to" the leader to rejoin.</p>
   </div>
 </section>
+<div class="live-toast" id="liveToast" hidden role="alert"><p id="liveToastText"></p><div class="live-toast-btns" id="liveToastBtns"></div></div>
 <section class="team" id="layoutPane" hidden aria-label="Layout on this device">
   <div class="team-card">
     <div class="setlist-head"><h2>Layout on this device</h2><button id="layoutClose">Done</button></div>
@@ -1580,9 +1604,14 @@ function renderNow(){
   else if(s&&i>=0)ne.textContent='Last song';
   $('#nowPrev').disabled=!(i>0);$('#nowNextBtn').disabled=!nx;
 }
+/* my key: transpose the chart on this device only (per song), without changing the band's key or the pad */
+function myKeys(){try{return JSON.parse(localStorage.getItem('pc.myKey')||'{}')||{}}catch(e){return {}}}
+function myOff(id){const v=myKeys()[id];return Number.isInteger(v)?((v%12)+12)%12:0}
+function setMyOff(id,off){const m=myKeys();if(off)m[id]=off;else delete m[id];try{localStorage.setItem('pc.myKey',JSON.stringify(m))}catch(e){}}
 function renderChart(){
   renderNow();
   const s=currentSong(),body=$('#chartBody');if(!body)return;
+  const kw=$('#chKeyWrap');if(kw)kw.hidden=true;
   $('#chTitle').textContent=s?s.name:'No song loaded';
   $('#chMeta').textContent=s?`Key ${KEYS[s.key]} · ${s.bpm} BPM · ${s.meter}`:'';
   $('#chCols').textContent=S.chartCols===2?'2 col':'1 col';
@@ -1590,8 +1619,8 @@ function renderChart(){
   if(document.body.classList.contains('view-mixer'))return;
   const c=s&&pin?readChart(ck(s)):null;
   const pdfMode=!!(c&&c.linked&&!c.error&&!(c.chart||'').trim()&&c.pdfs&&c.pdfs.length);
-  const sig=[!!pin,s&&s.id,s&&s.arr,s&&s.key,c&&c.at,S.chartCols,pdfMode?S.chartSize+'|'+(S.pdfLight?1:0)+'|'+(pdfPick[ck(s)]||''):''].join('|');
-  if(sig===chartSig)return;chartSig=sig;
+  const sig=[!!pin,s&&s.id,s&&s.arr,s&&s.key,s&&myOff(s.id),c&&c.at,S.chartCols,pdfMode?S.chartSize+'|'+(S.pdfLight?1:0)+'|'+(pdfPick[ck(s)]||''):''].join('|');
+  if(sig===chartSig){if(kw&&s&&c&&c.linked&&(c.chart||'').trim())kw.hidden=false;return}chartSig=sig;
   if(!pin){
     body.innerHTML='<form class="chart-signin" id="chSignin"><p>Sign in with your PIN to see chord charts.</p><input type="password" id="chPin" inputmode="numeric" autocomplete="off" aria-label="Your PIN" maxlength="40"><button type="submit">Sign in</button><span class="err" id="chErr"></span></form>';
     return;
@@ -1604,12 +1633,21 @@ function renderChart(){
   if(!c.chart.trim()&&c.pdfs===undefined){body.innerHTML='<div class="chart-empty"><p>Checking Planning Center for a PDF chart…</p></div>';fetchChart(s);return}
   if(!c.chart.trim()&&c.pdfs.length){renderPdf(s,c,body);return}
   if(!c.chart.trim()){body.innerHTML='<div class="chart-empty"><p>No chord chart is typed in Planning Center for this arrangement'+(c.arrangement?' ('+escH(c.arrangement)+')':'')+', and no PDF is attached to it.</p><p>To get chords that transpose, import the song from SongSelect in Planning Center and choose <b>ChordPro (Editable)</b>.</p></div>';return}
-  const from=noteIdx(c.chart_key);const semis=from==null?0:(s.key-from+12)%12;
-  const note=from==null?'Chart key isn’t set in Planning Center, so it’s shown as written.':semis?`Transposed from ${pretty(c.chart_key)} to ${KEYS[s.key]}.`:`Chart in ${KEYS[s.key]}.`;
-  body.innerHTML='<p class="chart-note">'+escH(note)+(c.arrangement?' Arrangement: '+escH(c.arrangement)+'.':'')+'</p><div class="sheet'+(S.chartCols===2?' cols2':'')+'">'+sheetHtml(c.chart,semis,FLAT_KEYS.has(s.key))+'</div>';
-  body.querySelectorAll('.sheet .sec').forEach((e,i)=>e.dataset.mark=i);liveMarkApply(true);
-  body.scrollTop=0;
+  const off=myOff(s.id),tk=(s.key+off)%12;
+  const from=noteIdx(c.chart_key);const semis=from==null?off:(tk-from+12)%12;
+  let note=from==null?'Chart key isn’t set in Planning Center, so it’s shown as written.':semis?`Transposed from ${pretty(c.chart_key)} to ${KEYS[tk]}.`:`Chart in ${KEYS[tk]}.`;
+  if(off)note=(from==null?`Moved ${off>6?12-off:off} half step${(off>6?12-off:off)>1?'s':''} ${off>6?'down':'up'} on this device. `:`Your key: ${KEYS[tk]}, on this device only. `)+`The band and pad are in ${KEYS[s.key]}.`;
+  body.innerHTML='<p class="chart-note">'+escH(note)+(c.arrangement?' Arrangement: '+escH(c.arrangement)+'.':'')+'</p><div class="sheet'+(S.chartCols===2?' cols2':'')+'">'+sheetHtml(c.chart,semis,FLAT_KEYS.has(tk))+'</div>';
+  body.querySelectorAll('.sheet .sec').forEach((e,i)=>e.dataset.mark=i);
+  body.scrollTop=0;liveMarkApply(true);
+  if(kw){
+    const sel=$('#chKey');sel.innerHTML='';
+    KEYS.forEach((k,i)=>{const d=(i-s.key+12)%12;const o=new Option(i===s.key?`${k} (band key)`:`${k} (${d<=6?'+'+d:'−'+(12-d)})`,String(d));if(d===off)o.selected=true;sel.add(o)});
+    kw.hidden=false;kw.classList.toggle('mine',!!off);
+  }
 }
+$('#chKey').addEventListener('change',e=>{const s=currentSong();if(!s)return;setMyOff(s.id,+e.target.value);chartSig='';renderChart();e.target.blur();
+  const off=myOff(s.id);say(off?`Your chart for ${s.name} is now in ${KEYS[(s.key+off)%12]}. Only this device changed.`:`Your chart for ${s.name} is back in the band key.`)});
 /* PDF charts: shown as written when Planning Center has no typed chart (they can't be transposed) */
 const PDFJS='https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/legacy/build/';
 const pdfPick={};let pdfLib=null,pdfToken=0,pdfDoc=null,pdfShownW=0;
@@ -2075,24 +2113,46 @@ $('#testPad').addEventListener('click',()=>{
 });
 
 
-/* ---------- Live: one lead device plays the sound, everyone else follows ---------- */
-// The lead device runs the pad and click. Other devices follow its song and chart section and never make sound.
-// The leader picks who else controls songs, pad, click or the chart; those taps are sent to the lead device.
-var L={st:null,tok:null,me:null,peek:false,ws:null,wsOk:false,seenLocal:0,lastPub:'',pubTimer:null,beat:null,armed:null,wasFollowing:false,markKey:'',markPending:false,people:null};
+/* ---------- Live: one leader, one sound device, everyone else follows ---------- */
+// The leader (a person) controls the session from any of their devices. The sound device (picked by the leader;
+// usually the one plugged into the board) is the only one that plays the pad and click. Every other device follows
+// the leader's song and chart section. The leader gives others control of songs, pad, click or the chart.
+var L={st:null,tok:null,me:null,peek:false,ws:null,wsOk:false,seenLocal:0,soundLocal:0,reqLocal:0,lastPub:'',pubKeys:[],pubTimer:null,beat:null,
+  wasFollowing:false,wasSound:false,resumed:false,markKey:'',markPending:false,people:null,devices:null,answerSeen:null,toastTimer:null};
 var devId=(()=>{try{let d=localStorage.getItem('pc.device');if(!d){d=newId();localStorage.setItem('pc.device',d)}return d}catch(e){return newId()}})();
 try{L.tok=localStorage.getItem('pc.liveTok')||sessionStorage.getItem('pc.liveTok')}catch(e){}
 const LIVE_AREAS=['songs','pad','click','chart'],AREA_NAME={songs:'Songs',pad:'Pad',click:'Click',chart:'Chart'};
-const LIVE_MSG={not_allowed:'The leader hasn’t given you control of that.',no_leader:'No one is leading right now.',bad_request:'That change wasn’t accepted.',busy:'Someone else is leading.',bad_pin:'Your PIN no longer works. Sign in again.',locked:'Too many wrong PIN tries. Wait 10 minutes.'};
-function devLabel(){const u=navigator.userAgent;if(/iPad/.test(u)||(/Macintosh/.test(u)&&navigator.maxTouchPoints>1))return 'iPad';if(/iPhone/.test(u))return 'iPhone';if(/Android/.test(u))return /Mobile/.test(u)?'Android phone':'Android tablet';if(/Mac/.test(u))return 'Mac';if(/Windows/.test(u))return 'Windows PC';return 'Computer'}
-function leaderActive(){return !!(L&&L.st&&L.st.leader_device&&Date.now()-L.seenLocal<65000)}
-function isLead(){return !!(L&&L.st&&L.tok&&L.st.leader_device===devId)}
-function following(){return !!(L&&S.follow!==false&&leaderActive()&&!isLead())}
-function can(a){return !!(L&&L.me&&Array.isArray(L.me.areas)&&L.me.areas.includes(a)&&leaderActive())}
+const LIVE_MSG={not_allowed:'You can’t do that in this session.',no_leader:'No one is leading right now.',bad_request:'That change wasn’t accepted.',
+  busy:'Someone else is leading.',bad_pin:'Your PIN no longer works. Sign in again.',locked:'Too many wrong PIN tries. Wait 10 minutes.',
+  not_found:'That device isn’t signed in any more.',expired:'That request ran out of time.'};
+function defaultLabel(){const u=navigator.userAgent;if(/iPad/.test(u)||(/Macintosh/.test(u)&&navigator.maxTouchPoints>1))return 'iPad';if(/iPhone/.test(u))return 'iPhone';if(/Android/.test(u))return /Mobile/.test(u)?'Android phone':'Android tablet';if(/Mac/.test(u))return 'Mac';if(/Windows/.test(u))return 'Windows PC';return 'Computer'}
+function devLabel(){try{const n=localStorage.getItem('pc.devName');if(n)return n}catch(e){}return (me&&me.name?me.name+'’s ':'')+defaultLabel()}
+const tms=t=>t?Date.parse(t)||0:0;
+function sessionOn(){return !!(L&&L.st&&L.st.leader_person&&Date.now()-L.seenLocal<65000)}
+function leaderActive(){return sessionOn()}
+function soundOn(){return !!(sessionOn()&&L.st.sound_device&&Date.now()-L.soundLocal<65000)}
+function isSound(){return !!(L&&L.st&&L.tok&&L.st.leader_person&&L.st.sound_device===devId)}
+function isLead(){return isSound()}
+function amLeader(){return !!(L&&L.me&&L.st&&L.st.leader_person&&L.me.person_id===L.st.leader_person)}
+function following(){return !!(L&&S.follow!==false&&sessionOn()&&!isSound())}
+function can(a){return !!(L&&L.me&&sessionOn()&&(amLeader()||(Array.isArray(L.me.areas)&&L.me.areas.includes(a))))}
 function clickOn(){return following()?!!L.st.click_on:running}
 function padIsOn(){return following()?!!L.st.pad_on:padOn}
 function padKeyNow(){return following()?(L.st.pad_key??S.key):(padOn&&A.voice?A.voice.key:S.key)}
 function liveSaveTok(){try{['pc.liveTok'].forEach(k=>{localStorage.removeItem(k);sessionStorage.removeItem(k)});if(L.tok)(localStorage.getItem('pc.pin')?localStorage:sessionStorage).setItem('pc.liveTok',L.tok)}catch(e){}}
 function liveMsg(t,ok){const e=$('#liveMsg');if(!e)return;e.textContent=t||'';e.classList.toggle('okmsg',!!ok)}
+
+/* a message that shows on top of any screen: the leader's yes/no prompt, answers, sound-device notices */
+function liveToast(text,btns,ms,kind){
+  const t=$('#liveToast');if(!t)return;
+  clearTimeout(L.toastTimer);
+  $('#liveToastText').textContent=text;
+  const b=$('#liveToastBtns');b.innerHTML='';
+  (btns||[]).forEach(([label,fn,cls])=>{const x=document.createElement('button');x.textContent=label;if(cls)x.className=cls;x.addEventListener('click',()=>{fn();});b.appendChild(x)});
+  t.hidden=false;t.dataset.kind=kind||'note';
+  if(ms)L.toastTimer=setTimeout(()=>{t.hidden=true},ms);
+}
+function liveToastHide(kind){const t=$('#liveToast');if(t&&(!kind||t.dataset.kind===kind))t.hidden=true}
 
 /* the connection that tells every device about changes as they happen */
 function liveConnect(){
@@ -2120,42 +2180,50 @@ function liveState(r,fetched){
   const prev=L.st;
   if(prev&&+r.rev<+prev.rev)return;
   L.st=r;
-  if(!prev||prev.leader_seen!==r.leader_seen){
-    const age=r.leader_seen?Date.now()-Date.parse(r.leader_seen):1e9;
-    L.seenLocal=prev&&!fetched?Date.now():Date.now()-Math.max(0,Math.min(age,120000));
+  const now=Date.now(),clamp=t=>Math.max(0,Math.min(now-t,120000));
+  const newest=Math.max(tms(r.leader_seen),tms(r.sound_seen)),prevNewest=prev?Math.max(tms(prev.leader_seen),tms(prev.sound_seen)):-1;
+  if(!newest)L.seenLocal=0;else if(newest!==prevNewest)L.seenLocal=prev&&!fetched?now:now-clamp(newest);
+  if(!r.sound_seen)L.soundLocal=0;else if(!prev||prev.sound_seen!==r.sound_seen)L.soundLocal=prev&&!fetched?now:now-clamp(tms(r.sound_seen));
+  if(!prev||prev.req_at!==r.req_at)L.reqLocal=r.req_at?now-clamp(tms(r.req_at)):0;
+  if(L.tok&&(!prev||prev.leader_person!==r.leader_person||prev.sound_device!==r.sound_device||prev.grants_rev!==r.grants_rev))liveMe();
+  // this device stopped being the sound device: go quiet
+  const snd=isSound();
+  if(L.wasSound&&!snd){
+    L.resumed=false;if(running)clickStop();if(padOn)padStop();
+    say(!r.leader_person?'Leading stopped.':r.sound_device?`${r.sound_label||'Another device'} plays the sound now. This device is silent.`:'No device is playing sound now.');
   }
-  if(L.tok&&(!prev||prev.leader_device!==r.leader_device||prev.leader_person!==r.leader_person||prev.grants_rev!==r.grants_rev))liveMe();
-  // someone else took the lead from this device, or the session ended: this device goes quiet
-  if(prev&&prev.leader_device===devId&&r.leader_device!==devId){
-    liveStopBeat();L.resumed=false;if(running)clickStop();if(padOn)padStop();
-    say(r.leader_name?`${r.leader_name} is leading now. This device follows and stays silent.`:'Leading stopped.');
+  if(!L.wasSound&&snd&&prev){
+    say(amLeader()?'This device plays the pad and click now.':`${r.leader_name} chose this device to play the pad and click.`);
+    try{ensureCtx()}catch(e){}
+    if(ctx&&ctx.state!=='running')liveToast('This device plays the pad and click now. Tap here once so it can make sound.',[['Enable sound',()=>{try{ctx.resume()}catch(e){}liveToastHide()},'go']],0,'sound');
   }
-  if(isLead()){
-    liveStartBeat();
+  L.wasSound=snd;
+  if(snd){
     if(!L.resumed){L.resumed=true;liveResume(r)}
-    else if(r.by_device!==devId)liveApplyAsLeader(prev,r);
+    else if(r.by_device!==devId)liveApplyAsSound(prev,r);
     else{
       // our own report came back: if someone else's change was merged into it, do that too
       const loc=liveSnap(),fake=Object.assign({},r);let miss=false;
       ['song_id','pad_on','pad_key','click_on','bpm','meter'].forEach(k=>{if(!(L.pubKeys||[]).includes(k)&&(r[k]??null)!==(loc[k]??null)&&!(k==='pad_key'&&!r.pad_on)){fake[k]={};miss=true}});
-      if(miss)liveApplyAsLeader(fake,r);
+      if(miss)liveApplyAsSound(fake,r);
     }
-  }
-  else{
+  }else{
     const f=following();
     if(f&&!L.wasFollowing&&(running||padOn)){if(running)clickStop();if(padOn)padStop();say(`${r.leader_name} is leading. This device follows and stays silent.`)}
     if(!f)L.peek=false;
     L.wasFollowing=f;
     if(f&&!L.peek)liveApplyAsFollower(prev,r);
   }
+  liveBeat();
+  liveRequests(prev,r);
   liveMarkApply(false);
   renderLive();
 }
 const changed=(a,b,k)=>!a||a[k]!==b[k];
 function liveIdx(r){return r.song_pos!=null&&setIds[r.song_pos]===r.song_id?r.song_pos:setIds.indexOf(r.song_id)}
 
-/* the lead device does what a controller asked for, then reports what it's actually doing */
-function liveApplyAsLeader(p,r){
+/* the sound device does what the leader or a controller asked for, then reports what it's actually doing */
+function liveApplyAsSound(p,r){
   const who=r.by_name&&(!me||r.by_name!==me.name)?r.by_name:null;let did='';
   if(changed(p,r,'song_id')||changed(p,r,'song_pos')){
     const cs=currentSong(),i=liveIdx(r);
@@ -2177,23 +2245,25 @@ function liveApplyAsLeader(p,r){
   if(who&&did)say(`${who} ${did}.`);
   livePublish(true);
 }
-// The lead device reloaded: go back to the leader's song (sound needs a tap to start again)
+// This device just became the sound device (or reloaded): go to the session's song and report what's playing
 function liveResume(r){
   const i=liveIdx(r);
   if(r.song_id&&i>=0&&i!==cur)loadSong(songAt(i),i);
+  else if(r.song_id&&i<0&&byId(r.song_id)&&loadedId!==r.song_id)loadSong(Object.assign({},byId(r.song_id)),-1);
   livePublish(true);
 }
-function liveSound(){try{ensureCtx();if(ctx.state!=='running'){ctx.resume();say('Tap the screen once so this device can play sound.')}}catch(e){}}
+function liveSound(){try{ensureCtx();if(ctx.state!=='running'){ctx.resume();if(ctx.state!=='running')liveToast('Tap here once so this device can play the pad and click.',[['Enable sound',()=>{try{ctx.resume()}catch(e){}liveToastHide()},'go']],0,'sound')}}catch(e){}}
 
-/* a following device shows the leader's song (no sound) */
+/* a following device shows the session's song (no sound) */
 function liveApplyAsFollower(p,r){
-  if(p&&!['song_id','song_pos','song_key','song_arr','bpm','meter','pad_on','pad_key','click_on','leader_device','leader_name'].some(k=>p[k]!==r[k])&&loadedId===r.song_id)return;
+  if(p&&!['song_id','song_pos','song_key','song_arr','bpm','meter','pad_on','pad_key','click_on','leader_person','leader_name','sound_device','sound_seen'].some(k=>p[k]!==r[k])&&loadedId===r.song_id)return;
   if(!r.song_id)return renderAll();
   const s=byId(r.song_id);
   if(!s){pull();return}
   const i=liveIdx(r);
   if(!p||changed(p,r,'song_id')||changed(p,r,'song_pos')||loadedId!==r.song_id){cur=i;loadedId=r.song_id}
-  if(r.bpm)S.bpm=r.bpm;if(r.meter)S.meter=r.meter;if(r.pad_key!=null)S.key=r.pad_key;else if(r.song_key!=null)S.key=r.song_key;
+  if(soundOn()){if(r.bpm)S.bpm=r.bpm;if(r.meter)S.meter=r.meter;if(r.pad_key!=null)S.key=r.pad_key;else if(r.song_key!=null)S.key=r.song_key}
+  else{const ss=i>=0?songAt(i):s;S.bpm=ss.bpm;S.meter=ss.meter;S.key=r.song_key??ss.key}
   renderAll();
 }
 
@@ -2202,19 +2272,24 @@ function liveSnap(){
   return {song_id:s?s.id:null,song_pos:s&&cur>=0&&setIds[cur]===s.id?cur:null,song_key:s?s.key:null,song_arr:s&&s.arr?String(s.arr):null,
     pad_on:padOn,pad_key:padOn&&A.voice?A.voice.key:S.key,click_on:running,bpm:S.bpm,meter:S.meter};
 }
-/* report this device's song, pad and click when it's leading */
+/* report this device's song, pad and click when it's the sound device */
 function livePublish(now){
-  if(!L||!isLead())return;
+  if(!L||!isSound())return;
   clearTimeout(L.pubTimer);
   L.pubTimer=setTimeout(()=>{
-    if(!isLead())return;
+    if(!isSound())return;
     const snap=liveSnap(),st=L.st||{},diff={};
     Object.keys(snap).forEach(k=>{if((st[k]??null)!==snap[k])diff[k]=snap[k]});
     const j=JSON.stringify(diff);if(!Object.keys(diff).length||j===L.lastPub)return;
     L.lastPub=j;L.pubKeys=Object.keys(diff);liveSend(diff,true).then(ok=>{if(!ok)L.lastPub=''});
   },now?0:150);
 }
-function liveStartBeat(){requestWake();if(!L.beat)L.beat=setInterval(()=>{if(isLead())liveSend({},true);else liveStopBeat()},20000)}
+// The sound device and the leader's devices check in every 20 seconds so everyone knows the session is still on
+function liveBeat(){
+  const need=!!(L.tok&&L.st&&L.st.leader_person&&(isSound()||amLeader()));
+  if(need&&!L.beat){requestWake();L.beat=setInterval(()=>{if(L.tok&&L.st&&L.st.leader_person&&(isSound()||amLeader()))liveSend({},true);else liveStopBeat()},20000)}
+  else if(!need)liveStopBeat();
+}
 function liveStopBeat(){clearInterval(L.beat);L.beat=null}
 
 async function liveSend(patch,quiet){
@@ -2227,9 +2302,10 @@ async function liveSend(patch,quiet){
   }catch(e){if(!quiet)say('Couldn’t reach the live session. Check the internet connection.')}
   liveFetch();return false;
 }
-// A follower's tap: send it to the lead device if they've been given that part
+// A follower's tap: send it to the session if they've been given that part
 function liveSet(area,patch,local){
   if(!can(area)){say(L.me?`${L.st.leader_name} hasn’t given you control of the ${area==='songs'?'songs':area}.`:'Sign in, and the leader can give you control.');return}
+  if((area==='pad'||area==='click')&&!soundOn()){say(`No device is playing the pad and click. ${amLeader()?'Pick a sound device in the Live window.':L.st.leader_name+' can pick one in the Live window.'}`);return}
   if(local)local();
   Object.assign(L.st,patch);renderAll();
   liveSend(patch);
@@ -2239,6 +2315,7 @@ function doPadToggle(){if(following())return liveSet('pad',{pad_on:!L.st.pad_on,
 function livePadKey(k){if(L.st.pad_on&&L.st.pad_key===k)return liveSet('pad',{pad_on:false});liveSet('pad',{pad_on:true,pad_key:k},()=>{S.key=k})}
 function doBpm(b){if(following()){const v=Math.max(30,Math.min(260,Math.round(b)||S.bpm));return liveSet('click',{bpm:v},()=>{S.bpm=v})}setBpm(b)}
 function liveToggleBoth(c,p){
+  if(!soundOn()&&(can('click')||can('pad')))return say(`No device is playing the pad and click. ${amLeader()?'Pick a sound device in the Live window.':L.st.leader_name+' can pick one in the Live window.'}`);
   const on=(c?!!L.st.click_on:true)&&(p?!!L.st.pad_on:true),patch={};let skipped=[];
   if(c){if(can('click'))patch.click_on=!on;else skipped.push('click')}
   if(p){if(can('pad')){patch.pad_on=!on;patch.pad_key=L.st.pad_key??S.key}else skipped.push('pad')}
@@ -2249,35 +2326,68 @@ function liveToggleBoth(c,p){
 function liveSong(s,i){
   if(can('songs')){
     L.peek=false;cur=i;loadedId=s.id;S.bpm=s.bpm;S.meter=s.meter;S.key=s.key;
-    Object.assign(L.st,{song_id:s.id,song_pos:i>=0?i:null,mark:null});renderAll();
-    liveSend({song_id:s.id,song_pos:i>=0?i:null});
+    Object.assign(L.st,{song_id:s.id,song_pos:i>=0?i:null,song_key:s.key,mark:null});renderAll();
+    const patch={song_id:s.id,song_pos:i>=0?i:null,song_key:s.key};if(s.arr)patch.song_arr=String(s.arr);
+    liveSend(patch);
     return;
   }
-  // without song control, this device looks ahead on its own until "Back to the leader"
+  // without song control, this device looks ahead on its own until "Back to <leader>"
   L.peek=true;cur=i;loadedId=s.id;S.bpm=s.bpm;S.meter=s.meter;S.key=s.key;renderAll();renderLive();
   say(`Looking ahead at ${s.name}. Tap “Back to ${L.st.leader_name}” to follow again.`);
 }
 function liveBack(){L.peek=false;liveApplyAsFollower(null,L.st);liveMarkApply(true);renderLive();const s=currentSong();say(`Following ${L.st.leader_name}${s?' on '+s.name:''}.`)}
 
+/* asking to lead: the leader gets a yes/no prompt on every device they're signed in on */
+function reqFresh(r){return !!(r&&r.req_person&&L.reqLocal&&Date.now()-L.reqLocal<120000)}
+function liveRequests(prev,r){
+  const mine=r.req_device===devId;
+  if(amLeader()&&reqFresh(r)){
+    liveToast(`${r.req_name} wants to lead${r.req_label?' from '+r.req_label:''}.`,[[`Let ${r.req_name} lead`,()=>liveAnswer(true),'go'],['Keep leading',()=>liveAnswer(false)]],0,'ask');
+  }else liveToastHide('ask');
+  // the answer to my own request
+  if(r.req_answer&&r.req_answer_for===devId&&L.answerSeen!==r.rev&&prev&&(prev.req_answer!==r.req_answer||prev.req_answer_for!==r.req_answer_for)){
+    L.answerSeen=r.rev;
+    if(r.req_answer==='accepted'){liveToast(`${r.by_name} handed you the lead. You’re leading now.`,null,6000);say('You’re leading now.')}
+    else{liveToast(`${r.by_name} wants to keep leading for now.`,null,6000);say(`${r.by_name} wants to keep leading for now.`)}
+  }
+  if(mine&&r.req_person&&!reqFresh(r)){rpc('live_request_cancel',{p_token:L.tok}).catch(()=>{});liveMsg(`${r.leader_name} didn’t answer.`)}
+}
+async function liveAnswer(yes){
+  liveToastHide('ask');
+  try{const r=await rpc('live_answer',{p_token:L.tok,p_accept:yes});if(r!=='ok')say(LIVE_MSG[r]||'That answer didn’t go through.')}
+  catch(e){say('Couldn’t reach the live session.')}
+}
+async function liveAsk(){
+  if(!L.tok)await liveJoin();
+  try{
+    const r=await rpc('live_request',{p_token:L.tok});
+    if(r==='requested'){liveMsg(`Asked ${L.st.leader_name}. Waiting for an answer…`,true);await liveFetch()}
+    else if(r==='free')return liveLead();
+    else if(r!=='ok')liveMsg(LIVE_MSG[r]||'That request didn’t go through.');
+  }catch(e){liveMsg('Couldn’t reach the live session.')}
+  renderLive();
+}
+async function liveCancelAsk(){try{await rpc('live_request_cancel',{p_token:L.tok});await liveFetch();liveMsg('Request cancelled.')}catch(e){}renderLive()}
+
 /* chart sections and PDF pages: tap one to show it on everyone's screen */
-function canMark(){return isLead()||(following()&&!L.peek&&can('chart'))}
+function canMark(){return sessionOn()&&!L.peek&&(amLeader()||isSound()||(following()&&can('chart')))}
 function liveMarkTap(i){
   if(!canMark())return;
   const s=currentSong();if(!s)return;
-  if(isLead()||can('chart')){Object.assign(L.st,{mark:i,mark_song:s.id});L.markKey='';liveMarkApply(true);liveSend({mark:i,mark_song:s.id})}
+  Object.assign(L.st,{mark:i,mark_song:s.id});L.markKey='';liveMarkApply(true);liveSend({mark:i,mark_song:s.id});
 }
 function liveMarkApply(force){
   if(!L||!L.st)return;
   const body=$('#chartBody');if(!body)return;
   document.body.classList.toggle('live-mark-ok',canMark());
-  const s=currentSong(),on=leaderActive()&&(isLead()||following())&&!L.peek&&s&&L.st.mark!=null&&L.st.mark_song===s.id;
+  const s=currentSong(),on=sessionOn()&&(isSound()||following())&&!L.peek&&s&&L.st.mark!=null&&L.st.mark_song===s.id;
   body.querySelectorAll('.live-mark').forEach(e=>e.classList.remove('live-mark'));
   if(!on){L.markKey='';return}
   const key=s.id+':'+L.st.mark,el=body.querySelector(`[data-mark="${L.st.mark}"]`);
   if(!el){L.markPending=true;return}
   el.classList.add('live-mark');
   if(key!==L.markKey||L.markPending){L.markKey=key;L.markPending=false;
-    if(!isLead()&&L.st.by_device!==devId){const top=el.offsetTop-body.offsetTop-8;body.scrollTo({top:Math.max(0,top),behavior:'smooth'})}}
+    if(L.st.by_device!==devId){const top=el.offsetTop-body.offsetTop-8;body.scrollTo({top:Math.max(0,top),behavior:'smooth'})}}
 }
 
 /* sign this device in for live mode */
@@ -2292,13 +2402,13 @@ async function liveMe(){
   if(!L.tok)return;
   try{
     const r=await rpc('live_me',{p_token:L.tok});
-    if(r&&r.status==='ok'){L.me=r;renderLive();renderAll();if(!$('#livePane').hidden&&r.can_grant&&!L.people)liveLoadPeople()}
+    if(r&&r.status==='ok'){L.me=r;renderLive();renderAll()}
     else if(r&&r.status==='bad_token'){L.tok=null;L.me=null;liveSaveTok();liveJoin()}
   }catch(e){}
 }
 function liveLeave(){
   if(!L||!L.tok)return;
-  const t=L.tok;L.tok=null;L.me=null;L.people=null;liveStopBeat();liveSaveTok();
+  const t=L.tok;L.tok=null;L.me=null;L.people=null;L.devices=null;liveStopBeat();liveSaveTok();
   try{rpc('live_leave',{p_token:t})}catch(e){}
   renderLive();
 }
@@ -2306,16 +2416,12 @@ async function liveLead(){
   liveSound();
   if(!L.tok)await liveJoin();
   if(!L.tok)return liveMsg('Sign in with your PIN to lead.');
-  const other=leaderActive()&&!isLead()?L.st:null;
-  const take=!!other;
-  if(take&&!L.armed){L.armed=setTimeout(()=>{L.armed=null;renderLive()},4000);renderLive();return}
-  clearTimeout(L.armed);L.armed=null;
   if(running)clickStop();
   liveMsg('Starting…');
   try{
-    const r=await rpc('live_lead',{p_token:L.tok,p_take:take,p_state:liveSnap()});
-    if(r&&r.status==='ok'){L.me=r.me;L.lastPub='';L.resumed=true;await liveFetch();liveStartBeat();liveMsg('You’re leading from this device. Everyone following sees your song.',true);say('Leading. Following devices now show your song.')}
-    else if(r&&r.status==='busy'){await liveFetch();liveMsg(`${r.leader_name} just started leading.`)}
+    const r=await rpc('live_lead',{p_token:L.tok,p_take:false,p_state:liveSnap()});
+    if(r&&r.status==='ok'){L.me=r.me;L.lastPub='';L.resumed=true;L.wasSound=true;await liveFetch();liveBeat();liveMsg('You’re leading, and this device plays the pad and click. You can move the sound to another device below.',true);say('Leading. Following devices now show your song.');liveLoadLists()}
+    else if(r&&r.status==='busy'){await liveFetch();liveMsg(`${r.leader_name} is leading. Ask them to hand it over.`)}
     else liveMsg(LIVE_MSG[r&&r.status]||'Couldn’t start leading.');
   }catch(e){liveMsg('Couldn’t reach the live session. Check the internet connection.')}
   renderLive();
@@ -2323,20 +2429,32 @@ async function liveLead(){
 async function liveEnd(){
   if(!L.tok)return;
   try{const r=await rpc('live_end',{p_token:L.tok});
-    if(r==='ok'){liveStopBeat();await liveFetch();liveMsg('Leading stopped. Every device is on its own again.',true)}
+    if(r==='ok'){await liveFetch();liveMsg('Leading stopped. Every device is on its own again.',true)}
     else liveMsg(LIVE_MSG[r]||'Couldn’t stop the session.');
   }catch(e){liveMsg('Couldn’t reach the live session.')}
   renderLive();
 }
-async function liveLoadPeople(){
+async function liveSetSound(id){
+  try{const r=await rpc('live_sound',{p_token:L.tok,p_device:id});
+    if(r==='ok'){await liveFetch();const d=(L.devices||[]).find(x=>x.id===id);liveMsg(id?`${d?d.label:'That device'} plays the pad and click now.`:'No device plays the pad and click now.',true)}
+    else liveMsg(LIVE_MSG[r]||'Couldn’t change the sound device.');
+  }catch(e){liveMsg('Couldn’t reach the live session.')}
+  liveLoadLists();
+}
+async function liveLoadLists(){
   if(!L.tok||!L.me||!L.me.can_grant)return;
-  try{const r=await rpc('live_people',{p_token:L.tok});if(r&&r.status==='ok'){L.people=r.people;renderGrants()}}catch(e){}
+  try{
+    const [p,d]=await Promise.all([rpc('live_people',{p_token:L.tok}),rpc('live_devices',{p_token:L.tok})]);
+    if(p&&p.status==='ok')L.people=p.people;
+    if(d&&d.status==='ok')L.devices=d.devices;
+    renderLive();
+  }catch(e){}
 }
 function renderGrants(){
   const t=$('#liveGrants');if(!t)return;
-  const box=$('#liveGrantsBox');box.hidden=!(L.me&&L.me.can_grant&&L.people);
+  const box=$('#liveGrantsBox');box.hidden=!(L.me&&L.me.can_grant&&L.people&&sessionOn());
   if(box.hidden)return;
-  const leadP=L.st&&leaderActive()?L.st.leader_person:null;
+  const leadP=L.st.leader_person;
   t.innerHTML='<thead><tr><th>Person</th>'+LIVE_AREAS.map(a=>`<th>${AREA_NAME[a]}</th>`).join('')+'</tr></thead><tbody></tbody>';
   const tb=t.querySelector('tbody');
   L.people.forEach(p=>{
@@ -2345,70 +2463,105 @@ function renderGrants(){
     tr.querySelector('span').textContent=p.name;tb.appendChild(tr);
   });
 }
+function renderSoundPick(){
+  const box=$('#liveSoundBox');if(!box)return;
+  box.hidden=!(L.me&&L.me.can_grant&&sessionOn()&&L.devices);
+  if(box.hidden)return;
+  const list=$('#liveSoundList');list.innerHTML='';
+  const add=(id,label,sub,checked)=>{
+    const l=document.createElement('label');l.className='check sound-opt';
+    l.innerHTML=`<input type="radio" name="liveSound" value="${escH(id||'')}" ${checked?'checked':''}><span><b></b><small></small></span>`;
+    l.querySelector('b').textContent=label;l.querySelector('small').textContent=sub;list.appendChild(l);
+  };
+  L.devices.forEach(d=>add(d.id,d.label||'Device',d.name+(d.me?' · this device':''),L.st.sound_device===d.id));
+  add('','No sound device','Charts and songs only',!L.st.sound_device);
+}
+function liveName(){const st=L.st;return st&&st.leader_name?st.leader_name:''}
 function renderLive(){
   if(!L)return;
-  const st=L.st,act=leaderActive(),lead=isLead(),f=following(),signed=!!(pin&&me);
+  const st=L.st,on=sessionOn(),snd=isSound(),lead=amLeader(),f=following(),signed=!!(pin&&me);
   const canLead=!!(signed&&(me.role==='editor'||me.role==='admin'));
+  const nm=liveName();
   document.body.classList.toggle('live-follow',f&&!L.peek);
-  document.body.classList.toggle('live-no-click',f&&!can('click'));
-  document.body.classList.toggle('live-no-pad',f&&!can('pad'));
+  document.body.classList.toggle('live-no-click',f&&(!can('click')||!soundOn()));
+  document.body.classList.toggle('live-no-pad',f&&(!can('pad')||!soundOn()));
   document.body.classList.toggle('live-no-songs',f&&!can('songs'));
   document.querySelectorAll('.live-btn').forEach(b=>{
-    b.hidden=!signed&&!(st&&st.leader_device);
-    b.classList.toggle('lead',lead);b.classList.toggle('peek',!!(L.peek&&f));b.classList.toggle('follow',f&&!L.peek);b.classList.toggle('stale',!!(st&&st.leader_device&&!act));
-    b.textContent=lead?'Leading':L.peek&&f?`Back to ${st.leader_name}`:f?`Following ${st.leader_name===(me&&me.name)?'you':st.leader_name}`:act?'Not following':'Live';
+    b.hidden=!signed&&!(st&&st.leader_person);
+    b.classList.toggle('lead',on&&lead);b.classList.toggle('sound',on&&snd);b.classList.toggle('peek',!!(L.peek&&f));
+    b.classList.toggle('follow',f&&!L.peek&&!lead);b.classList.toggle('stale',!!(st&&st.leader_person&&!on));
+    b.textContent=on&&lead?(snd?'Leading · Sound':'Leading'):snd?'Sound device':L.peek&&f?`Back to ${nm}`:f?`Following ${nm}`:on?'Not following':'Live';
   });
-  const nm=st&&st.leader_name,where=st&&st.leader_label?` on the ${st.leader_label}`:'';
   const cn=$('#clickLiveNote'),pn=$('#padLiveNote');
-  if(cn)cn.textContent=f?(can('click')?`You control the click on ${nm===(me&&me.name)?'your':nm+'’s'} lead device.`:`${nm} controls the click.`):'';
-  if(pn)pn.textContent=f?(can('pad')?`You control the pad on ${nm===(me&&me.name)?'your':nm+'’s'} lead device.`:`${nm} controls the pad.`):'';
+  const where=soundOn()?(st.sound_label||'the sound device'):null;
+  if(cn)cn.textContent=!f?'':!soundOn()?'No device is playing the click right now.':can('click')?`You control the click. It plays on ${where}.`:`${nm} controls the click. It plays on ${where}.`;
+  if(pn)pn.textContent=!f?'':!soundOn()?'No device is playing the pad right now.':can('pad')?`You control the pad. It plays on ${where}.`:`${nm} controls the pad. It plays on ${where}.`;
   if($('#livePane').hidden)return;
+  // status
   const stEl=$('#liveStatus');
-  if(lead)stEl.innerHTML='<b>This device is leading.</b> Its pad and click are the ones playing, and every device that’s following shows the song you’re on.';
-  else if(act)stEl.innerHTML=`<b>${escH(nm)}</b> is leading${escH(where)}${nm===(me&&me.name)?' (that’s you, on another device)':''}.`;
-  else if(st&&st.leader_device)stEl.innerHTML=`<b>${escH(nm)}</b> was leading${escH(where)}, but that device hasn’t checked in for over a minute. Following devices stay where they are.`;
+  const sndLine=!on?'':st.sound_device?(snd?' <b>This device</b> plays the pad and click.':` Sound: <b>${escH(st.sound_label||'a device')}</b>${st.sound_name?' ('+escH(st.sound_name)+')':''}${soundOn()?'':' — it hasn’t checked in lately'}.`):' No device is playing the pad and click.';
+  if(on&&lead)stEl.innerHTML='<b>You’re leading.</b>'+sndLine;
+  else if(on)stEl.innerHTML=`<b>${escH(nm)}</b> is leading.`+sndLine;
+  else if(st&&st.leader_person)stEl.innerHTML=`<b>${escH(nm)}</b> was leading, but their devices haven’t checked in for over a minute. Following devices stay where they are.`;
   else stEl.textContent='No one is leading. Each device plays and moves through the set on its own.';
-  const lb=$('#liveLead');
-  lb.hidden=!canLead||lead;
-  lb.textContent=L.armed?'Tap again to take over':act?(nm===(me&&me.name)?'Move the lead to this device':`Take over from ${nm}`):'Lead from this device';
-  lb.classList.toggle('danger',!!L.armed);
-  $('#liveEnd').hidden=!(act||(st&&st.leader_device))||!(lead||(L.me&&(L.me.lead_person||L.me.role==='admin')));
-  $('#liveEnd').textContent=lead||(L.me&&L.me.lead_person)?'Stop leading':`End ${nm}’s session`;
-  $('#liveFollowRow').hidden=lead;
+  // lead / ask / stop
+  const lb=$('#liveLead'),ab=$('#liveAsk'),cb=$('#liveAskCancel'),eb=$('#liveEnd');
+  const waiting=!!(st&&st.req_device===devId&&reqFresh(st));
+  if(!on&&canLead){lb.hidden=false;lb.textContent='Lead from this device'}else lb.hidden=true;
+  ab.hidden=!(on&&canLead&&!lead)||waiting;ab.textContent=`Ask ${nm} to let you lead`;
+  cb.hidden=!waiting;
+  if(waiting)liveMsg(`Asked ${nm}. Waiting for an answer…`,true);
+  eb.hidden=!(on||(st&&st.leader_person))||!(lead||snd||(L.me&&L.me.role==='admin'));
+  eb.textContent=lead?'Stop leading':`End ${nm}’s session`;
+  $('#liveFollowRow').hidden=snd;
   $('#liveFollow').checked=S.follow!==false;
   const you=$('#liveYou');
   if(!signed)you.textContent='Sign in so the leader can give you control of the songs, pad, click or chart.';
-  else if(lead)you.textContent='You control everything. Others can control the parts you give them below.';
-  else if(L.me&&L.me.lead_person)you.textContent='You’re the leader, so you control everything from this device too. The sound still comes only from the lead device.';
-  else{const a=(L.me&&L.me.areas)||[];you.textContent=a.length?`You can control: ${a.map(x=>AREA_NAME[x]).join(', ')}. Your taps go to the lead device.`:'You follow only. The leader can give you control of songs, pad, click or the chart.'}
-  renderGrants();
+  else if(lead&&on)you.textContent=snd?'You control everything. Pick who else controls what below.':'You control everything from this device. The pad and click play only on the sound device.';
+  else if(snd)you.textContent=`This device plays the pad and click for the band. ${nm} controls the session, and the buttons here still work in an emergency.`;
+  else{const a=(L.me&&L.me.areas)||[];you.textContent=!on?'':a.length?`You can control: ${a.map(x=>AREA_NAME[x]).join(', ')}.`:`You follow only. ${nm} can give you control of songs, pad, click or the chart.`}
+  const dn=$('#liveDevName');if(dn&&document.activeElement!==dn)dn.value=(L.me&&L.me.device_label)||devLabel();
+  $('#liveDevRow').hidden=!signed;
+  renderSoundPick();renderGrants();
 }
 document.querySelectorAll('.live-btn').forEach(b=>b.addEventListener('click',()=>{
   if(L.peek&&following())return liveBack();
-  $('#livePane').hidden=false;liveMsg('');L.people=null;renderLive();if(L.tok)liveMe();liveLoadPeople();
+  $('#livePane').hidden=false;liveMsg('');renderLive();if(L.tok)liveMe().then(liveLoadLists);
 }));
-$('#liveClose').addEventListener('click',()=>{$('#livePane').hidden=true;clearTimeout(L.armed);L.armed=null});
+$('#liveClose').addEventListener('click',()=>{$('#livePane').hidden=true});
 $('#liveLead').addEventListener('click',liveLead);
+$('#liveAsk').addEventListener('click',liveAsk);
+$('#liveAskCancel').addEventListener('click',liveCancelAsk);
 $('#liveEnd').addEventListener('click',liveEnd);
 $('#liveFollow').addEventListener('change',e=>{S.follow=e.target.checked;persist();L.peek=false;L.wasFollowing=false;if(L.st)liveState(Object.assign({},L.st));renderAll();renderLive()});
+$('#liveSoundList').addEventListener('change',e=>{const r=e.target.closest('input[name=liveSound]');if(r)liveSetSound(r.value||null)});
+$('#liveDevSave').addEventListener('click',async()=>{
+  const v=$('#liveDevName').value.trim().slice(0,40);if(!v)return;
+  try{localStorage.setItem('pc.devName',v)}catch(e){}
+  if(!L.tok)return liveMsg('Saved on this device.',true);
+  try{const r=await rpc('live_rename',{p_token:L.tok,p_label:v});if(r==='ok'){liveMsg(`This device is “${v}”.`,true);liveMe();liveLoadLists()}else liveMsg(LIVE_MSG[r]||'Couldn’t rename it.')}catch(x){liveMsg('Couldn’t reach the live session.')}
+});
 $('#liveGrants').addEventListener('change',async e=>{
   const c=e.target.closest('input[data-p]');if(!c)return;
   const p=L.people.find(x=>x.id===c.dataset.p);if(!p)return;
   const areas=LIVE_AREAS.filter(a=>{const i=document.querySelector(`#liveGrants input[data-p="${p.id}"][data-a="${a}"]`);return i&&i.checked});
   try{const r=await rpc('live_grant',{p_token:L.tok,p_person:p.id,p_areas:areas});
     if(r==='ok'){p.areas=areas;liveMsg(`${p.name}: ${areas.length?areas.map(a=>AREA_NAME[a]).join(', '):'follow only'}.`,true)}
-    else{liveMsg(LIVE_MSG[r]||'That wasn’t saved.');liveLoadPeople()}
-  }catch(x){liveMsg('Couldn’t save. Check the internet connection.');liveLoadPeople()}
+    else{liveMsg(LIVE_MSG[r]||'That wasn’t saved.');liveLoadLists()}
+  }catch(x){liveMsg('Couldn’t save. Check the internet connection.');liveLoadLists()}
 });
-// the lead device needs a tap after loading before it can make sound
-['pointerdown','keydown'].forEach(ev=>document.addEventListener(ev,()=>{if(isLead()&&ctx&&ctx.state!=='running')try{ctx.resume()}catch(e){}},{passive:true}));
+// the sound device needs a tap after loading before it can make sound
+['pointerdown','keydown'].forEach(ev=>document.addEventListener(ev,()=>{if(isSound()&&ctx&&ctx.state!=='running')try{ctx.resume()}catch(e){}},{passive:true}));
 function liveInit(){
   liveConnect();liveFetch();
   if(pin&&!L.tok)liveJoin();else if(L.tok)liveMe();
   // backup when the live connection drops: check every few seconds
-  setInterval(()=>{if(!L.wsOk&&!document.hidden)liveFetch();renderLive()},5000);
+  setInterval(()=>{if(!L.wsOk&&!document.hidden)liveFetch();renderLive();if(L.st)liveRequests(L.st,L.st)},5000);
+  // signed-in devices check in each minute so the leader can pick them as the sound device
+  setInterval(()=>{if(L.tok&&!document.hidden)liveMe()},60000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden){liveFetch();if(!L.ws)liveConnect()}});
 }
+
 
 document.addEventListener('keydown',e=>{
   const tag=(e.target.tagName||'').toLowerCase();
